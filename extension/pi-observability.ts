@@ -68,6 +68,7 @@ function loadEnv(cwd: string) {
 async function probeServer(url: string): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 3000);
+  (timer as unknown as { unref?: () => void }).unref?.();
   try {
     const res = await fetch(`${url.replace(/\/+$/, "")}/health`, { signal: controller.signal });
     return res.ok;
@@ -310,6 +311,8 @@ class EventQueue {
       this.flushTimer = null;
       void this.flush();
     }, this.backoffMs);
+    // Never hold the process open for telemetry: pi must exit when work ends.
+    (this.flushTimer as unknown as { unref?: () => void }).unref?.();
   }
 
   public async flush() {
