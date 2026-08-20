@@ -1,338 +1,412 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import * as crypto from "node:crypto";
 
-const TOK = process.env.OBS_AUTH_TOKEN || "devtoken";
-const URL = process.env.OBS_SERVER_URL || "http://127.0.0.1:43190";
-const headers = { "Authorization": `Bearer ${TOK}` };
+const TOK = process.env["OBS_AUTH_TOKEN"] ?? "devtoken";
+const URL = process.env["OBS_SERVER_URL"] ?? "http://127.0.0.1:43190";
+const headers = { Authorization: `Bearer ${TOK}` };
+const sleep = (milliseconds: number): Promise<void> =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 
-function assert(condition: boolean, message: string) {
+interface Session {
+  session_id: string;
+}
+
+interface Event {
+  event_id: string;
+  seq: number;
+  type: string;
+  session_id: string;
+}
+
+interface StressSession {
+  sessionId: string;
+  eventCount: number;
+  firstEventId: string;
+  lastEventId: string;
+}
+
+interface BrowserResult {
+  stressRawEventCount: number;
+  initialVisibleRawEventCount: number;
+  filteredVisibleRawEventCount: number;
+  restoredVisibleRawEventCount: number;
+  singleRawEventIds: string[];
+  swimlaneRawEventIds: string[];
+  raceRawEventIds: string[];
+  selectedSessionId: string;
+  pool: string;
+  tag: string;
+  "window.location.hash": string;
+}
+
+function assert(condition: boolean, message: string): asserts condition {
   if (!condition) {
     throw new Error(`Assertion failed: ${message}`);
   }
 }
 
-// ━━ SSE helper ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
-async function runSSE(controller: AbortController, events: any[]): Promise<void> {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isSession(value: unknown): value is Session {
+  return isRecord(value) && typeof value["session_id"] === "string";
+}
+
+function isEvent(value: unknown): value is Event {
+  return (
+    isRecord(value) &&
+    typeof value["event_id"] === "string" &&
+    typeof value["seq"] === "number" &&
+    typeof value["type"] === "string" &&
+    typeof value["session_id"] === "string"
+  );
+}
+
+function parseArrayProperty<T>(
+  value: unknown,
+  property: string,
+  guard: (item: unknown) => item is T,
+): T[] {
+  assert(isRecord(value), "Expected JSON response object");
+  const items = value[property];
+  assert(Array.isArray(items), `Expected '${property}' array`);
+  assert(items.every(guard), `Expected valid entries in '${property}'`);
+  return items;
+}
+
+async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
+  const response = await fetch(url, init);
+  assert(response.ok, `Request failed (${response.status} ${response.statusText}): ${url}`);
+  return response.json();
+}
+
+async function runBrowser(
+  stressSid: string,
+  sessionId: string,
+  stressSession: StressSession,
+): Promise<BrowserResult> {
+  const child = spawn(process.execPath, ["scripts/run-swimlane-browser.mjs"], {
+    env: {
+      ...process.env,
+      OBS_STRESS_URL: `${URL}/?token=${TOK}#view=single&trace=raw&sid=${stressSid}`,
+      OBS_FLEET_URL: `${URL}/?token=${TOK}#view=single&trace=raw&pool=integration-v2&tag=fleet`,
+      OBS_SWIMLANE_URL: `${URL}/?token=${TOK}#view=swimlane&pool=integration-v2&tag=fleet`,
+      OBS_BROWSER_SESSION_ID: sessionId,
+      OBS_STRESS_SESSION_ID: stressSession.sessionId,
+      OBS_STRESS_EVENT_COUNT: String(stressSession.eventCount),
+      OBS_STRESS_FIRST_EVENT_ID: stressSession.firstEventId,
+      OBS_STRESS_LAST_EVENT_ID: stressSession.lastEventId,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  const code = await new Promise<number | null>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
+  assert(code === 0, `Browser runner failed (${code ?? "unknown"}): ${stderr}`);
+  const parsed: unknown = JSON.parse(stdout);
+  assert(isBrowserResult(parsed), "Browser runner returned an invalid result");
+  return parsed;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isBrowserResult(value: unknown): value is BrowserResult {
+  return (
+    isRecord(value) &&
+    typeof value["stressRawEventCount"] === "number" &&
+    typeof value["initialVisibleRawEventCount"] === "number" &&
+    typeof value["filteredVisibleRawEventCount"] === "number" &&
+    typeof value["restoredVisibleRawEventCount"] === "number" &&
+    isStringArray(value["singleRawEventIds"]) &&
+    isStringArray(value["swimlaneRawEventIds"]) &&
+    isStringArray(value["raceRawEventIds"]) &&
+    typeof value["selectedSessionId"] === "string" &&
+    typeof value["pool"] === "string" &&
+    typeof value["tag"] === "string" &&
+    typeof value["window.location.hash"] === "string"
+  );
+}
+
+function assertSameIds(actual: string[], expected: string[], view: string): void {
+  assert(
+    JSON.stringify(actual) === JSON.stringify(expected),
+    `${view} raw event IDs differ from the Single raw baseline`,
+  );
+}
+
+async function runFleet(): Promise<void> {
+  const child = spawn("bash", ["scripts/spawn-fleet.sh"], { stdio: "inherit" });
+  await new Promise<void>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`scripts/spawn-fleet.sh failed (${code ?? signal ?? "unknown"})`));
+      }
+    });
+  });
+}
+
+async function runSSE(controller: AbortController, events: Event[]): Promise<void> {
   const url = `${URL}/events/stream?pool=integration-v2&tag=fleet&token=${TOK}`;
   try {
     const response = await fetch(url, { signal: controller.signal });
-    if (!response.body) return;
-
+    assert(response.ok, `SSE connection failed: ${response.status} ${response.statusText}`);
+    assert(response.body !== null, "SSE response body was null");
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value);
+    for (;;) {
+      const result = await reader.read();
+      if (result.done) {
+        assert(controller.signal.aborted, "SSE stream ended before abort");
+        break;
+      }
+      buffer += decoder.decode(result.value, { stream: true });
       const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
+      buffer = lines.pop() ?? "";
       for (const line of lines) {
-        if (line.startsWith("data:")) {
-          const dataText = line.slice(5).trim();
-          if (dataText) {
-            try {
-              const evt = JSON.parse(dataText);
-              events.push(evt);
-            } catch {
-              // ignore
+        const dataText = line.startsWith("data:") ? line.slice(5).trim() : "";
+        if (dataText !== "") {
+          try {
+            const parsed: unknown = JSON.parse(dataText);
+            if (isEvent(parsed)) {
+              events.push(parsed);
             }
+          } catch (error: unknown) {
+            if (error instanceof SyntaxError) {
+              continue;
+            }
+            throw error;
           }
         }
       }
     }
-  } catch (err: any) {
-    if (err.name !== "AbortError") {
-      console.error("[SSE] Connection error:", err.message);
+  } catch (error: unknown) {
+    if (controller.signal.aborted && error instanceof Error && error.name === "AbortError") {
+      return;
     }
+    throw error;
   }
 }
 
-// ━━ Main Runner ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async function main() {
-  console.log("=== STARTING SWIMLANE VALIDATION ===");
-
-  // 1. Fetch initial targets to clean slate (we will spawn a fresh fleet)
-  console.log("[REST] Cleaning up/reading existing sessions...");
-  const initialSessionsRes = await fetch(`${URL}/sessions?pool=integration-v2&tag=fleet`, { headers });
-  const { sessions: initialSessions } = await initialSessionsRes.json();
-  const baseCount = initialSessions.length;
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // T1 — SSE Resync Drop Test
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function testSseResync(baseSessionIds: ReadonlySet<string>): Promise<string> {
   console.log("\n--- T1: SSE Resync Drop Test ---");
-
-  // 1. Open SSE connection 1
-  const sseEvents1: any[] = [];
+  const sseEvents1: Event[] = [];
   const controller1 = new AbortController();
   const ssePromise1 = runSSE(controller1, sseEvents1);
   console.log("[T1] SSE connection 1 opened.");
-
-  // Give SSE 1 a moment to register
-  await new Promise(resolve => setTimeout(resolve, 500));
-
-  // 2. Spawn fleet in background
+  await sleep(500);
   console.log("[T1] Spawning fleet...");
-  const fleetProcess = spawn("bash", ["scripts/spawn-fleet.sh"], { stdio: "inherit" });
-
-  // 3. Wait 3 seconds
+  const fleetPromise = runFleet();
   console.log("[T1] Sleeping 3 seconds while fleet is starting...");
-  await new Promise(resolve => setTimeout(resolve, 3000));
-
-  // 4. Abort the SSE controller
+  await sleep(3000);
   console.log("[T1] Aborting SSE connection 1 (simulating dropout)...");
   controller1.abort();
   await ssePromise1;
-
-  // 5. Sleep 2 seconds while fleet is still running
+  assert(sseEvents1.length > 0, "SSE connection 1 received no event frames");
   console.log("[T1] Sleeping 2 seconds while disconnected...");
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
-  // 6. Open SSE connection 2
-  const sseEvents2: any[] = [];
+  await sleep(2000);
+  const sseEvents2: Event[] = [];
   const controller2 = new AbortController();
   const ssePromise2 = runSSE(controller2, sseEvents2);
   console.log("[T1] SSE connection 2 opened.");
-
-  // 7. Wait until fleet finishes
-  const fleetExitCode = await new Promise<number>((resolve) => {
-    fleetProcess.on("exit", (code) => resolve(code ?? 0));
-  });
-  assert(fleetExitCode === 0, "scripts/spawn-fleet.sh failed");
+  await fleetPromise;
   console.log("[T1] Fleet execution finished.");
-
-  // Wait 1s for final flushes to land
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  // Abort second SSE connection
+  await sleep(1000);
   controller2.abort();
   await ssePromise2;
+  const firstConnectionIds = new Set(sseEvents1.map((event) => event.event_id));
+  assert(
+    sseEvents2.some((event) => !firstConnectionIds.has(event.event_id)),
+    "SSE connection 2 received no reconnect-specific event frames",
+  );
 
-  // 8. Fetch sessions to find the newly spawned ones
-  const postSessionsRes = await fetch(`${URL}/sessions?pool=integration-v2&tag=fleet`, { headers });
-  const { sessions: postSessions } = await postSessionsRes.json();
-  const spawnedSessions = postSessions.slice(0, postSessions.length - baseCount);
+  const json = await fetchJson(`${URL}/sessions?pool=integration-v2&tag=fleet`, { headers });
+  const postSessions = parseArrayProperty(json, "sessions", isSession);
+  const spawnedSessions = postSessions.filter((session) => !baseSessionIds.has(session.session_id));
   console.log(`[T1] Identified ${spawnedSessions.length} newly spawned sessions.`);
-  assert(spawnedSessions.length >= 3, `Expected at least 3 spawned sessions, got ${spawnedSessions.length}`);
-
-  // Fetch full event list for each session via REST and verify against combined SSE events
+  assert(
+    spawnedSessions.length >= 3,
+    `Expected at least 3 spawned sessions, got ${spawnedSessions.length}`,
+  );
   const targetSessions = spawnedSessions.slice(0, 3);
-  
-  // Calculate lastSeq per session before drop from sseEvents1
   const lastSeqs = new Map<string, number>();
-  for (const s of targetSessions) {
-    const sessionEvents = sseEvents1.filter((e: any) => e.session_id === s.session_id);
-    const maxSeq = sessionEvents.length > 0 ? Math.max(...sessionEvents.map((e: any) => e.seq)) : -1;
-    lastSeqs.set(s.session_id, maxSeq);
+  for (const session of targetSessions) {
+    const seqs = sseEvents1
+      .filter((event) => event.session_id === session.session_id)
+      .map((event) => event.seq);
+    lastSeqs.set(session.session_id, seqs.length === 0 ? -1 : Math.max(...seqs));
   }
-
-  // 9. Fetch missed backfills using since_seq for each session
-  const backfillEvents: any[] = [];
-  for (const s of targetSessions) {
-    const lastSeq = lastSeqs.get(s.session_id) ?? -1;
-    const backfillUrl = `${URL}/sessions/${s.session_id}/events?since_seq=${lastSeq}&limit=500`;
-    const backfillRes = await fetch(backfillUrl, { headers });
-    assert(backfillRes.ok, `since_seq request failed for session ${s.session_id}`);
-    const { events } = await backfillRes.json();
-    console.log(`[T1] Session ${s.session_id} (lastSeq before drop: ${lastSeq}): fetched ${events.length} backfill events.`);
+  const backfillEvents: Event[] = [];
+  for (const session of targetSessions) {
+    const lastSeq = lastSeqs.get(session.session_id) ?? -1;
+    const json = await fetchJson(
+      `${URL}/sessions/${session.session_id}/events?since_seq=${lastSeq}&limit=500`,
+      { headers },
+    );
+    const events = parseArrayProperty(json, "events", isEvent);
+    console.log(
+      `[T1] Session ${session.session_id} (lastSeq before drop: ${lastSeq}): fetched ${events.length} backfill events.`,
+    );
     backfillEvents.push(...events);
   }
-
-  // Combine sseEvents1 + backfills + sseEvents2 and deduplicate by event_id
-  const combinedEvents = [...sseEvents1, ...backfillEvents, ...sseEvents2];
-  const dedupedCombinedEvents: any[] = [];
   const seenIds = new Set<string>();
-  for (const e of combinedEvents) {
-    if (e && e.event_id && !seenIds.has(e.event_id)) {
-      seenIds.add(e.event_id);
-      dedupedCombinedEvents.push(e);
+  const deduped = [...sseEvents1, ...backfillEvents, ...sseEvents2].filter((event) => {
+    if (seenIds.has(event.event_id)) {
+      return false;
+    }
+    seenIds.add(event.event_id);
+    return true;
+  });
+  for (const session of targetSessions) {
+    const json = await fetchJson(`${URL}/sessions/${session.session_id}/events?limit=500`, {
+      headers,
+    });
+    const restEvents = parseArrayProperty(json, "events", isEvent);
+    const sorted = [...restEvents].sort((left, right) => left.seq - right.seq);
+    assert(sorted.length > 0, `Expected events for session ${session.session_id}`);
+    assert(sorted[0]?.seq === 0, `Expected first seq to be 0, got ${sorted[0]?.seq}`);
+    for (const [index, event] of sorted.entries()) {
+      assert(event.seq === index, `Sequence gap or mismatch. Index ${index} has seq ${event.seq}`);
+    }
+    for (const event of restEvents) {
+      const count = deduped.filter((candidate) => candidate.event_id === event.event_id).length;
+      assert(
+        count === 1,
+        `Event ${event.event_id} (seq ${event.seq}, type ${event.type}) appeared ${count} times in combined SSE list.`,
+      );
     }
   }
-
-  // Assert: every event in REST also exists exactly once in combined list (no gaps, no duplicates)
-  for (const s of targetSessions) {
-    const restRes = await fetch(`${URL}/sessions/${s.session_id}/events?limit=500`, { headers });
-    const { events: restEvents } = await restRes.json();
-
-    // Verify seq is strictly monotonic starting at 0
-    const sortedRest = [...restEvents].sort((a: any, b: any) => a.seq - b.seq);
-    assert(sortedRest[0].seq === 0, `Expected first seq to be 0, got ${sortedRest[0].seq}`);
-    for (let i = 0; i < sortedRest.length; i++) {
-      assert(sortedRest[i].seq === i, `Sequence gap or mismatch. Index ${i} has seq ${sortedRest[i].seq}`);
-    }
-
-    // Verify all rest events are found exactly once in our aggregated SSE telemetry
-    for (const re of restEvents) {
-      const matched = dedupedCombinedEvents.filter((e: any) => e.event_id === re.event_id);
-      assert(matched.length === 1, `Event ${re.event_id} (seq ${re.seq}, type ${re.type}) appeared ${matched.length} times in combined SSE list.`);
-    }
-  }
-
+  const browserSession = targetSessions[0];
+  assert(browserSession !== undefined, "Expected a fleet session for browser validation");
   console.log("  ✓ T1: SSE Resync Drop Test PASSED!");
+  return browserSession.session_id;
+}
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // T2 — DOM Stress Test
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  console.log("\n--- T2: DOM Stress Test ---");
-
-  // 1. Generate and POST 2000 synthetic events for a single fake session
+async function createStressSession(): Promise<StressSession> {
   const stressSid = `stress-${crypto.randomUUID().slice(0, 8)}`;
   console.log(`[T2] Generating 2,000 synthetic events for fake session: ${stressSid}`);
-  const fakeEvents: any[] = [];
-  for (let i = 0; i < 2000; i++) {
-    fakeEvents.push({
-      event_id: crypto.randomUUID(),
-      ts: new Date().toISOString(),
-      type: i === 0 ? "session_start" : i === 1999 ? "session_shutdown" : "turn_start",
-      session_id: stressSid,
-      cwd: process.cwd(),
-      pool: "integration-v2",
-      tags: ["fleet"],
-      payload: { index: i, text: `Synthetic Event #${i}` },
-      seq: i,
-    });
-  }
-
-  const postRes = await fetch(`${URL}/events`, {
+  const fakeEvents = Array.from({ length: 2000 }, (_, index) => ({
+    event_id: crypto.randomUUID(),
+    ts: new Date().toISOString(),
+    type: index === 0 ? "session_start" : index === 1999 ? "session_shutdown" : "turn_start",
+    session_id: stressSid,
+    cwd: process.cwd(),
+    pool: "integration-v2",
+    tags: ["fleet"],
+    payload:
+      index === 0
+        ? { reason: "startup" }
+        : index === 1999
+          ? { reason: "quit" }
+          : { turn_index: index },
+    seq: index,
+  }));
+  const result = await fetchJson(`${URL}/events`, {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json" },
     body: JSON.stringify(fakeEvents),
   });
-  assert(postRes.ok, `Failed to post stress events: ${postRes.statusText}`);
+  assert(
+    isRecord(result) &&
+      result["ingested"] === fakeEvents.length &&
+      Array.isArray(result["rejected"]) &&
+      result["rejected"].length === 0,
+    `Expected all ${fakeEvents.length} stress events to be ingested; observed ${JSON.stringify(result)}`,
+  );
   console.log("[T2] Posted 2,000 synthetic events successfully.");
+  const firstEventId = fakeEvents[0]?.event_id;
+  const lastEventId = fakeEvents.at(-1)?.event_id;
+  assert(firstEventId !== undefined && lastEventId !== undefined, "Stress fixture was empty");
+  return {
+    sessionId: stressSid,
+    eventCount: fakeEvents.length,
+    firstEventId,
+    lastEventId,
+  };
+}
 
-  // 2. Open UI via Playwright directly deep-linked to our stress session
-  console.log("[T2] Loading UI in Playwright deep-linked to stress session...");
-  const urlWithHashT2 = `${URL}/?token=${TOK}#view=single&sid=${stressSid}`;
-  spawnSync("playwright-cli", ["-s=stress", "open", urlWithHashT2], { encoding: "utf8" });
-  
-  // Wait for sidebar sessions and events to load
-  await new Promise(resolve => setTimeout(resolve, 3000));
-
-  // Count rendering rows
-  console.log("[T2] Querying DOM node count in #event-view...");
-  const evalNodeCount = spawnSync("playwright-cli", ["-s=stress", "eval", "document.querySelectorAll('#event-view .evt-row').length"], { encoding: "utf8" });
-  const nodeCount = parseInt(evalNodeCount.stdout.match(/Result\s+(\d+)/)?.[1] ?? "0", 10);
-  console.log(`[T2] DOM Row count rendered: ${nodeCount}`);
-
-  // Assert full render (append-only rendering with Set-based dedup)
-  assert(nodeCount >= 1000, `Expected >=1000 rows rendered (full append capped at client limit), got ${nodeCount}`);
-  
-  // Check for any console errors during stress render
-  const consoleR = spawnSync("playwright-cli", ["-s=stress", "console", "error"], { encoding: "utf8" });
-  assert(!consoleR.stdout.match(/SyntaxError|ReferenceError|TypeError|Maximum/), "UI threw JS errors during stress render");
-  console.log("  ✓ No JS errors thrown during stress render");
-
-  spawnSync("playwright-cli", ["-s=stress", "close"]);
+function assertBrowserResult(result: BrowserResult, expectedSessionId: string): void {
+  console.log("\n--- T2: DOM Stress Test ---");
+  console.log(`[T2] DOM Row count rendered: ${result.stressRawEventCount}`);
+  assert(
+    result.stressRawEventCount >= 1000,
+    `Expected >=1000 rows rendered (full append capped at client limit), got ${result.stressRawEventCount}`,
+  );
   console.log("  ✓ T2: DOM Stress Test PASSED!");
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // T3 — UI Search/Filter Visibility
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   console.log("\n--- T3: UI Search/Filter Visibility ---");
+  console.log(`[T3] Initial visible row count: ${result.initialVisibleRawEventCount}`);
+  console.log(`[T3] Filtered visible row count: ${result.filteredVisibleRawEventCount}`);
+  assert(
+    result.filteredVisibleRawEventCount < result.initialVisibleRawEventCount,
+    "Expected search to reduce visible count",
+  );
+  console.log(`[T3] Restored visible row count: ${result.restoredVisibleRawEventCount}`);
+  assert(
+    result.restoredVisibleRawEventCount === result.initialVisibleRawEventCount,
+    "Search clear should restore initial event row visibility",
+  );
+  assert(
+    result.selectedSessionId === expectedSessionId,
+    "Browser selected the wrong fleet session",
+  );
+  assertSameIds(result.swimlaneRawEventIds, result.singleRawEventIds, "Swimlane");
+  assertSameIds(result.raceRawEventIds, result.singleRawEventIds, "Race");
+  console.log("  ✓ T3: Raw search and sibling event isolation PASSED!");
 
-  spawnSync("playwright-cli", ["-s=t3", "open", `${URL}/?token=${TOK}#view=single&pool=integration-v2&tag=fleet`], { encoding: "utf8" });
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
-  // Select the second session item (which is a real fleet agent run containing tool calls) via JS click
-  console.log("[T3] Selecting target session...");
-  spawnSync("playwright-cli", ["-s=t3", "eval", "document.querySelectorAll('.session-item')[1].click()"], { encoding: "utf8" });
-  await new Promise(resolve => setTimeout(resolve, 1500));
-
-  // Get initial visible row count
-  const initialCountStr = spawnSync("playwright-cli", ["-s=t3", "eval", "document.querySelectorAll('#event-view .evt-row').length"], { encoding: "utf8" }).stdout;
-  const initialCount = parseInt(initialCountStr.match(/Result\s+(\d+)/)?.[1] ?? "0", 10);
-  console.log(`[T3] Initial visible row count: ${initialCount}`);
-
-  // Type "bash" in search box
-  console.log("[T3] Typing 'bash' into the search input...");
-  spawnSync("playwright-cli", ["-s=t3", "fill", "#search-box", "bash"], { encoding: "utf8" });
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  // Count visible rows containing "bash"
-  const filteredCountStr = spawnSync("playwright-cli", ["-s=t3", "eval", "Array.from(document.querySelectorAll('#event-view .evt-row')).filter(el => window.getComputedStyle(el).display !== 'none').length"], { encoding: "utf8" }).stdout;
-  const filteredCount = parseInt(filteredCountStr.match(/Result\s+(\d+)/)?.[1] ?? "0", 10);
-  console.log(`[T3] Filtered visible row count: ${filteredCount}`);
-  assert(filteredCount < initialCount, `Expected search to reduce visible count (initial: ${initialCount}, filtered: ${filteredCount})`);
-
-  // Clear search and assert all events restored
-  console.log("[T3] Clearing search input...");
-  spawnSync("playwright-cli", ["-s=t3", "fill", "#search-box", ""], { encoding: "utf8" });
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  const restoredCountStr = spawnSync("playwright-cli", ["-s=t3", "eval", "Array.from(document.querySelectorAll('#event-view .evt-row')).filter(el => window.getComputedStyle(el).display !== 'none').length"], { encoding: "utf8" }).stdout;
-  const restoredCount = parseInt(restoredCountStr.match(/Result\s+(\d+)/)?.[1] ?? "0", 10);
-  console.log(`[T3] Restored visible row count: ${restoredCount}`);
-  assert(restoredCount === initialCount, "Search clear should restore initial event row visibility");
-
-  spawnSync("playwright-cli", ["-s=t3", "close"]);
-  console.log("  ✓ T3: UI Search/Filter Visibility PASSED!");
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // T4 — URL State Round-Trip
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   console.log("\n--- T4: URL State Round-Trip ---");
-
-  // Load UI with custom hash state
-  const testHash = `view=swimlane&pool=integration-v2&tag=fleet`;
-  const urlWithHash = `${URL}/?token=${TOK}#${testHash}`;
-  console.log(`[T4] Launching UI with hash deep-link: ${urlWithHash}`);
-  
-  spawnSync("playwright-cli", ["-s=t4", "open", urlWithHash], { encoding: "utf8" });
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
-  // Assert that pool and tag inputs are correctly populated from hash state
-  const poolValStr = spawnSync("playwright-cli", ["-s=t4", "eval", "document.querySelector('#pool-filter').value"], { encoding: "utf8" }).stdout;
-  const poolVal = poolValStr.match(/Result\s+\"([^"]+)\"/)?.[1];
-  console.log(`[T4] Resolved pool filter input: ${poolVal}`);
-  assert(poolVal === "integration-v2", `Expected pool-filter to be 'integration-v2', got '${poolVal}'`);
-
-  const tagValStr = spawnSync("playwright-cli", ["-s=t4", "eval", "document.querySelector('#tag-filter').value"], { encoding: "utf8" }).stdout;
-  const tagVal = tagValStr.match(/Result\s+\"([^"]+)\"/)?.[1];
-  console.log(`[T4] Resolved tag filter input: ${tagVal}`);
-  assert(tagVal === "fleet", `Expected tag-filter to be 'fleet', got '${tagVal}'`);
-
-  // Assert view mode is restored
-  const viewModeStr = spawnSync("playwright-cli", ["-s=t4", "eval", "window.location.hash"], { encoding: "utf8" }).stdout;
-  const viewMode = viewModeStr.match(/Result\s+\"([^"]+)\"/)?.[1];
-  console.log(`[T4] Current window location hash: ${viewMode}`);
-  assert(viewMode?.includes("swimlane"), "Expected view mode to restore to swimlane");
-
-  spawnSync("playwright-cli", ["-s=t4", "close"]);
+  assert(
+    result.pool === "integration-v2",
+    `Expected pool-filter to be integration-v2, got ${result.pool}`,
+  );
+  assert(result.tag === "fleet", `Expected tag-filter to be fleet, got ${result.tag}`);
+  const hash = result["window.location.hash"];
+  console.log(`[T4] Current window location hash: ${hash}`);
+  assert(hash.includes("swimlane"), "Expected view mode to restore to swimlane");
   console.log("  ✓ T4: URL State Round-Trip PASSED!");
+  console.log("  ✓ UI loaded with zero console or page errors.");
+}
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // Playwright Headless Console Error check
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  console.log("\n--- UI Javascript Console Error Check ---");
-  try {
-    spawnSync("playwright-cli", ["-s=obs-ui-check", "open", `${URL}/?token=${TOK}`], { encoding: "utf8" });
-    const consoleR = spawnSync("playwright-cli", ["-s=obs-ui-check", "console", "error"], { encoding: "utf8" });
-    const errors = consoleR.stdout || "";
-    if (errors.match(/SyntaxError|ReferenceError|TypeError/)) {
-      console.error("  ❌ UI Javascript Console Error Check FAILED!");
-      console.error(errors);
-      process.exit(1);
-    }
-    spawnSync("playwright-cli", ["-s=obs-ui-check", "close"]);
-    console.log("  ✓ UI loaded with zero Syntax, Reference, or Type errors.");
-  } catch (err: any) {
-    console.log(`  [INFO] Playwright console verification skipped or failed: ${err.message}`);
-  }
-
+async function main(): Promise<void> {
+  console.log("=== STARTING SWIMLANE VALIDATION ===");
+  console.log("[REST] Cleaning up/reading existing sessions...");
+  const json = await fetchJson(`${URL}/sessions?pool=integration-v2&tag=fleet`, { headers });
+  const baseSessionIds = new Set(
+    parseArrayProperty(json, "sessions", isSession).map((session) => session.session_id),
+  );
+  const browserSessionId = await testSseResync(baseSessionIds);
+  const stressSession = await createStressSession();
+  const stressSid = stressSession.sessionId;
+  const browserResult = await runBrowser(stressSid, browserSessionId, stressSession);
+  assertBrowserResult(browserResult, browserSessionId);
   console.log("\n=================================");
   console.log("✓ ALL SWIMLANE VALIDATIONS PASSED");
   console.log("=================================");
 }
 
-main().catch((err) => {
+main().catch((error: unknown) => {
   console.error("\n❌ VALIDATION FAILED:");
-  console.error(err.message);
-  process.exit(1);
+  console.error(errorMessage(error));
+  process.exitCode = 1;
 });

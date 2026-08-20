@@ -32,7 +32,8 @@ async function main() {
     await waitForHealth();
     console.log("[T1] server healthy");
 
-    const thesis = "Bull thesis: AAPL deserves a higher multiple because on-device AI will create a supercycle and services ARPU acceleration.";
+    const thesis =
+      "Bull thesis: AAPL deserves a higher multiple because on-device AI will create a supercycle and services ARPU acceleration.";
     const createRes = await fetch(`${BASE_URL}/api/runs`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -55,9 +56,26 @@ async function main() {
     }
 
     assert(snapshot.status === "done", `expected done, got ${snapshot.status}`);
-    assert(snapshot.chat.some((m: any) => m.role === "assistant" && /@[a-zA-Z0-9_-]+/.test(m.text)), "assistant references an emitted artifact");
+    assert(
+      snapshot.chat.some((m: any) => m.role === "assistant" && /@[a-zA-Z0-9_-]+/.test(m.text)),
+      "assistant references an emitted artifact",
+    );
     assert(snapshot.artifacts.length >= 3, "at least three artifacts emitted");
-    assert(snapshot.artifacts.every((a: any) => ["table", "bar-chart", "pie-chart", "text", "html", "trend", "scorecard", "risk-map"].includes(a.kind)), "valid artifact kinds emitted");
+    assert(
+      snapshot.artifacts.every((a: any) =>
+        [
+          "table",
+          "bar-chart",
+          "pie-chart",
+          "text",
+          "html",
+          "trend",
+          "scorecard",
+          "risk-map",
+        ].includes(a.kind),
+      ),
+      "valid artifact kinds emitted",
+    );
     console.log("[T3] real pi-rpc run produced chat refs and artifacts");
 
     const followRes = await fetch(`${BASE_URL}/api/runs/${run.id}/messages`, {

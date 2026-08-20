@@ -14,12 +14,12 @@
 </p>
 
 ## Four Tools In One
+
 > Four Tools. One Theme. _Agent Observability_
 >
 > Pi Extension, Observability Dashboard, Steelman Product Agent, Plan Prompts
 
-
-**If you don't measure, you can't improve.** This repo is built around one thesis: the way to win with agents (engineering agents *and* product agents) is to measure their trade-off trifecta of **performance, speed, and cost**, because more *useful* tokens beat fewer tokens every time. You can't make that call by vibes. You make it by watching every turn, every tool call, every token. Four tools give you that:
+**If you don't measure, you can't improve.** This repo is built around one thesis: the way to win with agents (engineering agents _and_ product agents) is to measure their trade-off trifecta of **performance, speed, and cost**, because more _useful_ tokens beat fewer tokens every time. You can't make that call by vibes. You make it by watching every turn, every tool call, every token. Four tools give you that:
 
 <p align="center">
   <img src="images/triangle_v1_wireframe.svg" alt="The trade-off trifecta: a triangle with performance, speed, and cost at its vertices" width="780">
@@ -27,8 +27,8 @@
 
 1. **Pi extension** (`extension/`): drop it into any Pi agent with `-e` and it streams canonical lifecycle events (every turn, tool call, model change, cost line) to the server. Zero changes to the agent itself.
 2. **Observability dashboard** (`apps/observability/`): a Bun + SQLite server that ingests and persists those events, plus three browser views (**single** for one agent with full payloads, **swimlane** for N agents compared turn-by-turn, and **race** for who finished which step first) so you can A/B prompts and weigh the trifecta side by side.
-3. **Steelman product agent** (`apps/steelman/`): a real product app (investment bear-thesis analysis) running on an *observed* Pi agent, proving the telemetry holds up where it matters most: a product agent executing for real users, real money, real tools.
-4. **Plan prompts** (`.claude/skills/`): four spec skills that turn a prompt into an implementation plan with more *useful* tokens. The same skills your agents run under observation, so you can measure the trifecta across spec formats and pick the right one for the job:
+3. **Steelman product agent** (`apps/steelman/`): a real product app (investment bear-thesis analysis) running on an _observed_ Pi agent, proving the telemetry holds up where it matters most: a product agent executing for real users, real money, real tools.
+4. **Plan prompts** (`.claude/skills/`): four spec skills that turn a prompt into an implementation plan with more _useful_ tokens. The same skills your agents run under observation, so you can measure the trifecta across spec formats and pick the right one for the job:
    - `/spec`: markdown
    - `/htmlspec`: HTML
    - `/htmlvspec`: HTML + visuals (`gpt-image-2`)
@@ -85,7 +85,7 @@ Without telemetry you guess. With this stack you **watch**. Three views answer t
 - **Swimlane**: how do these N agents compare turn-by-turn?
 - **Race**: which agent finished which step first, and what did they do at that step?
 
-> *Measure to improve. The clarity of your measurement determines the clarity of the actions you can take.*
+> _Measure to improve. The clarity of your measurement determines the clarity of the actions you can take._
 
 ---
 
@@ -109,7 +109,7 @@ Three components, one wire format, one canonical event store:
    - Hosts the browser UI as static files, no separate frontend server.
 
 3. **Vanilla-JS browser UI**: `apps/observability/public/`
-   - `index.html` + `app.js`: single-session timeline, URL hash state, search, type filters, keyboard nav, cost/token rollups, scroll-pause autoresume.
+   - `index.html` + `app.js`: Single opens as a complete content-first transcript with captured-thinking and compact/full tool controls; `trace=raw` preserves complete forensic envelopes, search, filters, keyboard navigation, cost/token rollups, and paused live scrolling.
    - `swimlane.js`: N sticky lanes side by side, live slide-in + per-event-type color pulse.
    - `race.js`: horizontal turn-grouped race view for side-by-side step comparison.
 
@@ -125,11 +125,11 @@ The event flows left to right: extension → server → UI. Backpressure flows t
 
 Each view answers a different question. Switch with the top-right toggle; the URL hash carries view + selection so the link is shareable.
 
-| View | Question it answers | Density | When to use it |
-|---|---|---|---|
-| **Single** | What is *this* session doing right now? | Vertical event-per-row stream with an amber slide-in pulse on every live row | Debugging one specific agent, reading the full payload of any event, copying event JSON |
-| **Swimlane** | How do these N sessions compare, turn-by-turn? | One sticky lane per session, identical row format, lanes scroll independently | Comparing a fleet, watching a swarm, A/B-ing two prompts side by side |
-| **Race** | Who finished which step first, and what did they actually do at that step? | Horizontal lanes with turn boundaries as vertical ticks, events as arrows along the lane | Benchmarking, post-mortem, showing off |
+| View         | Question it answers                                                        | Density                                                                                  | When to use it                                                                         |
+| ------------ | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Single**   | What is _this_ session doing right now?                                    | Complete Pi-TUI-style transcript by default; deep-linkable Raw Events via `trace=raw`    | Reading prompt/thinking/tools/answer causally or inspecting and copying full envelopes |
+| **Swimlane** | How do these N sessions compare, turn-by-turn?                             | One sticky lane per session, identical row format, lanes scroll independently            | Comparing a fleet, watching a swarm, A/B-ing two prompts side by side                  |
+| **Race**     | Who finished which step first, and what did they actually do at that step? | Horizontal lanes with turn boundaries as vertical ticks, events as arrows along the lane | Benchmarking, post-mortem, showing off                                                 |
 
 All three views consume the same SSE stream from `server.ts`. The same `ObsEvent` rows render in all three, with no schema fanout.
 
@@ -247,18 +247,18 @@ The agent's model and provider are set via `STEELMAN_AGENT_MODEL` / `STEELMAN_AG
 
 Agentic engineering has two hard constraints: **planning** and **reviewing**. The model does the work in between; you live or die by how well you frame it going in and verify it coming out. This section is about the front end of that (the plan) and the single lever that moves it most.
 
-The lever is **more useful tokens**. Anthropic's "[unreasonable effectiveness of HTML](https://claude.com/blog/using-claude-code-the-unreasonable-effectiveness-of-html)" post landed on the same idea from the structure side: give the agent richer, more structured context and it performs better. The keyword is **useful**, not *more*. A wall of boilerplate is more tokens and worse plans. A diagram of the data model, a mocked-up component, a labeled before/after: those are tokens that change what the agent builds. You are spending context to buy precision. When you combine this with OpenAIs [GPT Image 2.0](https://openai.com/index/introducing-chatgpt-images-2-0/) model for image generation, you can generate structured, information rich, visual prompts. What i like to call: **VSpecs**.
+The lever is **more useful tokens**. Anthropic's "[unreasonable effectiveness of HTML](https://claude.com/blog/using-claude-code-the-unreasonable-effectiveness-of-html)" post landed on the same idea from the structure side: give the agent richer, more structured context and it performs better. The keyword is **useful**, not _more_. A wall of boilerplate is more tokens and worse plans. A diagram of the data model, a mocked-up component, a labeled before/after: those are tokens that change what the agent builds. You are spending context to buy precision. When you combine this with OpenAIs [GPT Image 2.0](https://openai.com/index/introducing-chatgpt-images-2-0/) model for image generation, you can generate structured, information rich, visual prompts. What i like to call: **VSpecs**.
 
 The four `/plan` prompts are four points on the tokens-vs-precision curve, cheapest to richest:
 
-| Prompt | Format | Tokens | Best when |
-|---|---|---|---|
-| `/spec` | Markdown | Lowest | Text-first work, tight context budgets, the plan is mostly prose and file lists |
-| `/htmlspec` | HTML | Mid | You want structure and inline prototypes (a mocked component, a comparison table) without image cost |
-| `/vspec` | Markdown + AI visuals | Mid-High | You want image-enriched plans but prefer plain markdown over HTML scaffolding (`gpt-image-2`) |
-| `/htmlvspec` | HTML + AI visuals | High | UI/front-end work where a rendered diagram per section earns its tokens (`gpt-image-2`) |
+| Prompt       | Format                | Tokens   | Best when                                                                                            |
+| ------------ | --------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `/spec`      | Markdown              | Lowest   | Text-first work, tight context budgets, the plan is mostly prose and file lists                      |
+| `/htmlspec`  | HTML                  | Mid      | You want structure and inline prototypes (a mocked component, a comparison table) without image cost |
+| `/vspec`     | Markdown + AI visuals | Mid-High | You want image-enriched plans but prefer plain markdown over HTML scaffolding (`gpt-image-2`)        |
+| `/htmlvspec` | HTML + AI visuals     | High     | UI/front-end work where a rendered diagram per section earns its tokens (`gpt-image-2`)              |
 
-Why visuals at all? Because modern models are multimodal, and an image is one of the most token-dense, lowest-ambiguity ways to communicate intent. A single diagram of "these three components, wired this way" replaces paragraphs of prose the agent would otherwise have to reconstruct, and reconstruct *its way*, not yours. The agent reads the plan and executes it, so an image embedded in the plan is an instruction with far less room to drift.
+Why visuals at all? Because modern models are multimodal, and an image is one of the most token-dense, lowest-ambiguity ways to communicate intent. A single diagram of "these three components, wired this way" replaces paragraphs of prose the agent would otherwise have to reconstruct, and reconstruct _its way_, not yours. The agent reads the plan and executes it, so an image embedded in the plan is an instruction with far less room to drift.
 
 There's a real cost, and it's worth naming: visual specs are slower and more expensive to produce, and the observability stack here **does not** meter image-generation cost; that spend happens outside the Pi event stream. So the question is never "which spec is best," it's the trifecta question this whole repo is built to answer: **for this task, what's the trade-off between performance, speed, and cost?** Run the same prompt through two spec formats, watch both agents in swimlane or race, and let the turn counts, token totals, and costs decide. Measure first; then turn the winner into an eval and scale it.
 
@@ -273,7 +273,7 @@ Things this stack does well, things it doesn't try to do, and the failure modes 
 - **Extension batches up to 50.** Burst-heavy agents can lag the UI by ~1s under load. The queue drops oldest on overflow (logged, never silent). Tune `EVT_BATCH_MAX` in the extension if your workload needs it.
 - **No retroactive backfill.** Events are stored on arrival. If your extension was disabled mid-run, that turn is gone; there's no Pi-session-log replayer (yet).
 - **WAL files in `db/`.** `obs.db-wal` and `obs.db-shm` are real files. `.gitignore` covers them via `*.db*`. If you want a portable snapshot, `just backup` does the right thing.
-- **SSE reconnect is best-effort.** On reconnect the client refetches the latest N events for every active lane and dedupes by `event_id`. If you lose the network for an hour, you get the last hour's tail, not the gap.
+- **SSE reconnect resyncs persisted history.** Single fetches forward from its highest known numeric sequence after a reconnect; Swimlane and Race do the same per active lane. Clients dedupe by `event_id` and numeric-sort the merged result. Events never ingested while the extension or server was down still cannot be recovered.
 - **`~TPS` is an estimate.** The single-mode `~TPS` pill is `usage.output × 1000 / generation_ms` (post-prefill, real streaming rate). For batched-delta turns where `generation_ms < 50ms` it's suppressed; the math is honest, the millisecond timer is the noisy part. Renders as `—` when the window is too small to mean anything.
 - **Project-local skills follow pi's convention, not Claude's.** The boot snapshot reflects whatever pi actually loaded. Pi discovers project skills at `<cwd>/.pi/skills/`, not `.claude/skills/`, so if you keep skills under `.claude/`, point pi at them explicitly with `--skill .claude/skills` or symlink `.pi/skills`. The extension faithfully reports whatever pi finds.
 

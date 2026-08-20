@@ -45,66 +45,85 @@ Follow this format when creating implementation plans:
 # Plan: <task name>
 
 ## Task Description
+
 <describe the task in detail based on the prompt>
 
 ## Objective
+
 <clearly state what will be accomplished when this plan is complete>
 
 <if task_type is feature or complexity is medium/complex, include these sections:>
+
 ## Problem Statement
+
 <clearly define the specific problem or opportunity this task addresses>
 
 ## Solution Approach
+
 <describe the proposed solution approach and how it addresses the objective>
 </if>
 
 ## Relevant Files
+
 Use these files to complete the task:
 
 <list files relevant to the task with bullet points explaining why. Include new files to be created under an h3 'New Files' section if needed>
 
 <if complexity is medium/complex, include this section:>
+
 ## Implementation Phases
+
 ### Phase 1: Foundation
+
 <describe any foundational work needed>
 
 ### Phase 2: Core Implementation
+
 <describe the main implementation work>
 
 ### Phase 3: Integration & Polish
+
 <describe integration, testing, and final touches>
 </if>
 
 ## Step by Step Tasks
+
 IMPORTANT: Execute every step in order, top to bottom.
 
 <list step by step tasks as h3 headers with bullet points. Start with foundational changes then move to specific changes. Last step should validate the work>
 
 ### 1. <First Task Name>
+
 - <specific action>
 - <specific action>
 
 ### 2. <Second Task Name>
+
 - <specific action>
 - <specific action>
 
 <continue with additional tasks as needed>
 
 <if task_type is feature or complexity is medium/complex, include this section:>
+
 ## Testing Strategy
+
 <describe testing approach, including unit tests and edge cases as applicable>
 </if>
 
 ## Acceptance Criteria
+
 <list specific, measurable criteria that must be met for the task to be considered complete>
 
 ## Validation Commands
+
 Execute these commands to validate the task is complete:
 
 <list specific commands to validate the work. Be precise about what to run>
 - Example: `uv run python -m py_compile apps/*.py` - Test to ensure the code compiles
 
 ## Notes
+
 <optional additional context, considerations, or dependencies. If new libraries are needed, specify using `uv add`>
 ```
 

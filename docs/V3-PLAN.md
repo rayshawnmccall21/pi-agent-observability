@@ -7,6 +7,7 @@ Synthesized from three critiques: `V3-CRITIQUE-CLAUDE.md`, obv-ds's reply, obv-f
 ## Scope decisions (already made)
 
 ### IN — must-ship blockers (all three agreed)
+
 1. **URL state / deep linking** — `view`, `pool`, `tag`, `sid` (single), `lanes` (swimlane CSV), `auto_add` encoded in `location.hash`. Restore on load, update on change. Share-link works.
 2. **Append-only single-mode render + dedup Set** — full rebuild only when filters/search/focus changes; otherwise append. `seenIds: Set<string>` per session for O(1) dedup.
 3. **Lane pill names: full text, not 4-char truncation** — drop `THIN`/`SESS`/`AGEN` etc. Pills are colored; the text needs to read. Single mode already does this; swimlane should match.
@@ -19,6 +20,7 @@ Synthesized from three critiques: `V3-CRITIQUE-CLAUDE.md`, obv-ds's reply, obv-f
 10. **Scroll-pause toast** — when user scrolls a lane / single timeline up, show a small floating "↓ paused — click to resume live" button at the bottom of that scrollable region.
 
 ### IN — high-value nice-to-haves
+
 11. **`?` keyboard shortcut help overlay** in header.
 12. **Copy-event-JSON button** (📋 in expanded detail).
 13. **Expand all / collapse all** buttons in pane-header (single mode).
@@ -27,6 +29,7 @@ Synthesized from three critiques: `V3-CRITIQUE-CLAUDE.md`, obv-ds's reply, obv-f
 16. **Sidebar sort dropdown**: `Latest activity` (default), `Most expensive`, `Errors only`.
 
 ### OUT — deferred to v4
+
 - Icon-based pills (text is clearer, simpler).
 - Per-extension custom telemetry endpoint (already covered via `custom` event type).
 - Global header stats (needs new `/stats` SQL aggregate endpoint).
@@ -37,21 +40,21 @@ Synthesized from three critiques: `V3-CRITIQUE-CLAUDE.md`, obv-ds's reply, obv-f
 
 ## New test coverage (obv-flash)
 
-| # | Test | What it asserts |
-|---|------|------------------|
-| T1 | SSE resync drop test | Spawn fleet, abort SSE 3s in, reconnect with `since_seq=<lastSeen>`, assert no duplicates + no gaps |
-| T2 | DOM stress test | Headlessly inject ~2000 synthetic events via SSE, measure DOM node count + render time stays bounded (<1s p95 for new event), browser doesn't OOM |
-| T3 | UI search/filter visibility | Type a query, assert non-matching `.evt-row` count drops; click chip, assert visible row count matches expected |
-| T4 | URL state round-trip | Set view+pool+tag+sid in URL hash, reload, assert UI matches |
+| #   | Test                        | What it asserts                                                                                                                                   |
+| --- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T1  | SSE resync drop test        | Spawn fleet, abort SSE 3s in, reconnect with `since_seq=<lastSeen>`, assert no duplicates + no gaps                                               |
+| T2  | DOM stress test             | Headlessly inject ~2000 synthetic events via SSE, measure DOM node count + render time stays bounded (<1s p95 for new event), browser doesn't OOM |
+| T3  | UI search/filter visibility | Type a query, assert non-matching `.evt-row` count drops; click chip, assert visible row count matches expected                                   |
+| T4  | URL state round-trip        | Set view+pool+tag+sid in URL hash, reload, assert UI matches                                                                                      |
 
 ## Owners
 
-| Block | Owner | Lines of code (estimate) |
-|---|---|---|
-| **UI (sections 1–14)** — single, swimlane, sidebar, breadcrumb, URL state, perf fixes, toasts, overlays | **obv-ds** | ~400 lines of `app.js` + `swimlane.js` + `index.html` deltas |
-| **Extension + types** — `compaction`, `branch_nav` events, `latency_ms` field on assistant payload, types.ts additions | **obv-flash** | ~80 lines extension + ~30 lines types.ts |
-| **Validator extensions T1–T4** | **obv-flash** | ~150 lines |
-| **Integration, headless validation, sign-off** | **obv-claude (me)** | screenshots + e2e |
+| Block                                                                                                                  | Owner               | Lines of code (estimate)                                     |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------ |
+| **UI (sections 1–14)** — single, swimlane, sidebar, breadcrumb, URL state, perf fixes, toasts, overlays                | **obv-ds**          | ~400 lines of `app.js` + `swimlane.js` + `index.html` deltas |
+| **Extension + types** — `compaction`, `branch_nav` events, `latency_ms` field on assistant payload, types.ts additions | **obv-flash**       | ~80 lines extension + ~30 lines types.ts                     |
+| **Validator extensions T1–T4**                                                                                         | **obv-flash**       | ~150 lines                                                   |
+| **Integration, headless validation, sign-off**                                                                         | **obv-claude (me)** | screenshots + e2e                                            |
 
 ## Wire-format changes (small, additive only)
 

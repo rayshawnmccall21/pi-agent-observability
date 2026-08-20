@@ -22,9 +22,7 @@ Alternatively, add the path to your local `~/.pi/agent/settings.json`:
 
 ```json
 {
-  "extensions": [
-    "/absolute/path/to/extension/pi-observability.ts"
-  ]
+  "extensions": ["/absolute/path/to/extension/pi-observability.ts"]
 }
 ```
 
@@ -34,14 +32,14 @@ You can configure the telemetry stream using CLI flags or environment variables.
 
 ### CLI Flags
 
-| Flag | Type | Description |
-|---|---|---|
-| `--obs-server-url` | `string` | Observability server URL (default: `http://127.0.0.1:43190`). |
-| `--obs-token` | `string` | Bearer token for server authentication (never logged). |
-| `--o-pool` | `string` | Logical pool / bucket name (default: `"default"`). |
-| `--o-tag` | `string` | Comma-separated or repeatable tags. |
-| `--o-name` | `string` | Optional human-friendly name for this agent session. |
-| `--obs-disable` | `boolean` | Hard kill switch. When true, no listeners are registered. |
+| Flag               | Type      | Description                                                   |
+| ------------------ | --------- | ------------------------------------------------------------- |
+| `--obs-server-url` | `string`  | Observability server URL (default: `http://127.0.0.1:43190`). |
+| `--obs-token`      | `string`  | Bearer token for server authentication (never logged).        |
+| `--o-pool`         | `string`  | Logical pool / bucket name (default: `"default"`).            |
+| `--o-tag`          | `string`  | Comma-separated or repeatable tags.                           |
+| `--o-name`         | `string`  | Optional human-friendly name for this agent session.          |
+| `--obs-disable`    | `boolean` | Hard kill switch. When true, no listeners are registered.     |
 
 ### Environment Variables
 

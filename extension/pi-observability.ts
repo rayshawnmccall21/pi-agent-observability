@@ -35,10 +35,7 @@ let seqCounter = 0;
 // ━━ Helper functions ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function loadEnv(cwd: string) {
-  const envPaths = [
-    path.join(cwd, ".env"),
-    path.join(cwd, ".env.local"),
-  ];
+  const envPaths = [path.join(cwd, ".env"), path.join(cwd, ".env.local")];
   for (const envPath of envPaths) {
     if (fs.existsSync(envPath)) {
       try {
@@ -50,7 +47,10 @@ function loadEnv(cwd: string) {
           if (eqIdx <= 0) continue;
           const key = trimmed.slice(0, eqIdx).trim();
           let val = trimmed.slice(eqIdx + 1).trim();
-          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          if (
+            (val.startsWith('"') && val.endsWith('"')) ||
+            (val.startsWith("'") && val.endsWith("'"))
+          ) {
             val = val.slice(1, -1);
           }
           // Don't overwrite vars already set by the shell (avoid stale-.env footgun)
@@ -79,7 +79,10 @@ async function probeServer(url: string): Promise<boolean> {
   }
 }
 
-function truncateArgs(args: Record<string, any>): { args: Record<string, any>; truncated: boolean } {
+function truncateArgs(args: Record<string, any>): {
+  args: Record<string, any>;
+  truncated: boolean;
+} {
   let truncated = false;
   let copy: Record<string, any>;
   try {
@@ -197,7 +200,8 @@ function buildSystemPromptOptionsDigest(opts: any): SystemPromptOptionsDigest | 
     for (const [k, v] of Object.entries(opts.toolSnippets)) snippets[k] = String(v ?? "");
     digest.tool_snippets = snippets;
   }
-  if (Array.isArray(opts.promptGuidelines)) digest.prompt_guidelines = opts.promptGuidelines.map(String);
+  if (Array.isArray(opts.promptGuidelines))
+    digest.prompt_guidelines = opts.promptGuidelines.map(String);
   const cp = digestPromptText(opts.customPrompt);
   if (cp) digest.custom_prompt = cp;
   const ap = digestPromptText(opts.appendSystemPrompt);
@@ -225,7 +229,7 @@ function createEventEnvelope<T>(
     tags: string[];
     provider?: string;
     model?: string;
-  }
+  },
 ): ObsEventEnvelope<T> {
   const seq = seqCounter++;
   return {
@@ -263,7 +267,7 @@ class EventQueue {
     private token: string,
     private pi: ExtensionAPI,
     private onPostFailed: (err: any) => void,
-    getNextSeq: () => number
+    getNextSeq: () => number,
   ) {
     this.getNextSeq = getNextSeq;
   }
@@ -273,7 +277,12 @@ class EventQueue {
       this.queue.shift(); // Drop oldest
       this.droppedEventsCount++;
       if (this.droppedEventsCount === 1) {
-        const overflowError = this.createOverflowErrorEvent(event.session_id, event.cwd, event.pool, event.tags);
+        const overflowError = this.createOverflowErrorEvent(
+          event.session_id,
+          event.cwd,
+          event.pool,
+          event.tags,
+        );
         this.queue.push(overflowError);
       }
     }
@@ -286,7 +295,12 @@ class EventQueue {
     }
   }
 
-  private createOverflowErrorEvent(sessionId: string, cwd: string, pool: string, tags: string[]): any {
+  private createOverflowErrorEvent(
+    sessionId: string,
+    cwd: string,
+    pool: string,
+    tags: string[],
+  ): any {
     return {
       event_id: crypto.randomUUID(),
       ts: new Date().toISOString(),
@@ -443,7 +457,10 @@ export default function (pi: ExtensionAPI) {
     loadEnv(ctx.cwd);
 
     // 2. Resolve parameters
-    const serverUrl = (pi.getFlag("obs-server-url") as string) || process.env.OBS_SERVER_URL || "http://127.0.0.1:43190";
+    const serverUrl =
+      (pi.getFlag("obs-server-url") as string) ||
+      process.env.OBS_SERVER_URL ||
+      "http://127.0.0.1:43190";
     const token = (pi.getFlag("obs-token") as string) || process.env.OBS_AUTH_TOKEN || "";
     const pool = (pi.getFlag("o-pool") as string) || process.env.OBS_POOL || "default";
     const name = (pi.getFlag("o-name") as string) || process.env.OBS_NAME || undefined;
@@ -453,12 +470,17 @@ export default function (pi: ExtensionAPI) {
     let tags: string[] = [];
     if (rawTag) {
       if (Array.isArray(rawTag)) {
-        tags = rawTag.map(t => String(t).trim()).filter(Boolean);
+        tags = rawTag.map((t) => String(t).trim()).filter(Boolean);
       } else if (typeof rawTag === "string") {
-        tags = rawTag.split(",").map(t => t.trim()).filter(Boolean);
+        tags = rawTag
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
       }
     } else if (process.env.OBS_TAG) {
-      tags = process.env.OBS_TAG.split(",").map(t => t.trim()).filter(Boolean);
+      tags = process.env.OBS_TAG.split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
     }
 
     // 3. Reset seq counter + boot-snapshot gate
@@ -473,7 +495,7 @@ export default function (pi: ExtensionAPI) {
       (err) => {
         logObs("post_failed", { error: err?.message || String(err) });
       },
-      () => seqCounter++
+      () => seqCounter++,
     );
 
     if (!token) {
@@ -483,7 +505,9 @@ export default function (pi: ExtensionAPI) {
           `📡 pi-observability: no auth token — set OBS_AUTH_TOKEN env or --obs-token to match the server.`,
           "warning",
         );
-      } catch { /* hasUI may be false */ }
+      } catch {
+        /* hasUI may be false */
+      }
       logObs("no_token_configured", { server_url: serverUrl });
     }
 
@@ -500,7 +524,9 @@ export default function (pi: ExtensionAPI) {
             "warning",
           );
         }
-      } catch { /* hasUI may be false */ }
+      } catch {
+        /* hasUI may be false */
+      }
       logObs(connected ? "server_connected" : "server_unreachable", { server_url: serverUrl });
     })();
 
@@ -674,17 +700,18 @@ export default function (pi: ExtensionAPI) {
 
     const startTs = turnStartTimes.get(activeTurnIndex);
     const firstTs = firstTokenTimes.get(activeTurnIndex);
-    const endTs   = Date.now();
-    const latency_ms    = startTs ? endTs - startTs : undefined;
-    const prefill_ms    = startTs && firstTs ? firstTs - startTs : undefined;
+    const endTs = Date.now();
+    const latency_ms = startTs ? endTs - startTs : undefined;
+    const prefill_ms = startTs && firstTs ? firstTs - startTs : undefined;
     const generation_ms = firstTs ? endTs - firstTs : undefined;
     // Floor at 50 ms: below that the streaming window is too small to measure
     // a rate (batched deltas produce e.g. 4 ms → 18000 TPS, pure measurement
     // noise). 50 ms × 2000 TPS ceiling = 100 tokens, which is still well above
     // any realistic single-batch arrival, so the floor only drops noise.
-    const output_tps    = generation_ms && generation_ms >= 50 && usage.output > 0
-      ? Math.round((usage.output / generation_ms) * 1000)
-      : undefined;
+    const output_tps =
+      generation_ms && generation_ms >= 50 && usage.output > 0
+        ? Math.round((usage.output / generation_ms) * 1000)
+        : undefined;
     // Memory hygiene (obv-flash v3 nit, bundled here): clean both Maps so they
     // don't accumulate one entry per turn over the life of the session.
     turnStartTimes.delete(activeTurnIndex);
@@ -799,7 +826,7 @@ export default function (pi: ExtensionAPI) {
     const se = event.summaryEntry;
     const payload: BranchNavPayload = {
       from_id: event.oldLeafId ?? "",
-      to_id:   event.newLeafId ?? "",
+      to_id: event.newLeafId ?? "",
       has_summary: !!se,
       summary_preview: se ? truncateToBytes(se.summary ?? "", 2000).text : undefined,
     };
