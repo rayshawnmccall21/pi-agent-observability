@@ -4,12 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOK="${OBS_AUTH_TOKEN:-devtoken}"
 URL="${OBS_SERVER_URL:-http://127.0.0.1:43190}"
-EXT="$ROOT/extension/pi-observability.ts"
 
 run() {
   local name="$1" prompt="$2"
   ( OBS_AUTH_TOKEN="$TOK" OBS_SERVER_URL="$URL" \
-    pi -e "$EXT" --o-pool integration-v2 --o-tag fleet \
+    pi --o-pool integration-v2 --o-tag fleet \
        --o-name "$name" -p "$prompt" \
        > "/tmp/fleet-${name}.log" 2>&1 ) &
   echo "[$$] spawned $name (pid $!)"

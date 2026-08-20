@@ -8,7 +8,9 @@
 
 1. View toggle in the header: **Single** ↔ **Swimlane**.
 2. Single-mode upgrades:
-   - Rich per-type rendering (user/assistant text, tool_call args, tool_result content w/ exit code, thinking italics, model_change cyan banner).
+   - **Current behavior:** Single defaults to a content-first Transcript with complete wrapped captured messages, provider-exposed thinking, and ID-correlated tool states. Raw Events remains deep-linkable with `trace=raw` and displays complete envelopes.
+   - Transcript controls toggle captured thinking and compact/full tools (Ctrl+T/Ctrl+O); global shortcuts do not intercept native interactive controls.
+   - Rich per-type Raw rendering (user/assistant text, tool_call args, tool_result content w/ exit code, thinking italics, model_change cyan banner).
    - Event-type filter chips inside the event view (multi-select; AND with search).
    - Search box: substring match on payload text + tool names.
    - Auto-scroll toggle that pauses when user scrolls up, resumes on "jump to bottom".
@@ -22,12 +24,13 @@
    - "Auto-add new sessions" toggle: when on, any session matching pool/tag filters that appears mid-stream is added as a new lane.
    - One global SSE connection (no `session_id` filter); client routes by `event.session_id`.
 4. Connection robustness:
-   - Reconnect with exponential backoff (already present).
-   - On reconnect, **resync** open lanes by re-fetching `/sessions/:id/events?since_seq=<lastSeen>` (server already supports `before_seq`; we need `since_seq` too — small server-side add).
+   - Reconnect with exponential backoff.
+   - On reconnect, **resync** Single and open sibling lanes by paging `/sessions/:id/events?since_seq=<lastSeen>` forward, deduplicating by `event_id`, and numeric-sorting before rendering.
+   - Single guards reconnect hydration by stream generation and selected session so stale responses cannot reset current UI or event state.
 
 ## Server-side additions (small)
 
-1. `GET /sessions/:id/events?since_seq=N` — return events with `seq > N`, ordered ascending. (Already supports `before_seq`; just add the inverse.)
+1. `GET /sessions/:id/events?since_seq=N` — implemented; returns events with `seq > N`, ordered ascending and bounded by the requested page limit.
 2. `GET /events/recent?pool=&tag=&limit=` (optional, nice-to-have) — N most-recent events across all matching sessions, ordered by `ts DESC`. Used for the "all activity" header banner.
 
 Nothing else.
@@ -45,16 +48,16 @@ interface ClientState {
   typeFilter: Set<ObsEventType>;
   autoScroll: boolean;
   autoAddLanes: boolean;
-  sessions: SessionSummary[];                // from /sessions, polled 3s
-  selectedSessionIds: Set<string>;           // lanes (swimlane) or focus (single)
-  lanes: Map<string, LaneState>;             // keyed by session_id
+  sessions: SessionSummary[]; // from /sessions, polled 3s
+  selectedSessionIds: Set<string>; // lanes (swimlane) or focus (single)
+  lanes: Map<string, LaneState>; // keyed by session_id
   sseStatus: "connecting" | "live" | "disconnected";
 }
 
 interface LaneState {
   session: SessionSummary;
-  events: ObsEvent[];      // ordered by seq ascending
-  lastSeq: number;         // for resync
+  events: ObsEvent[]; // ordered by seq ascending
+  lastSeq: number; // for resync
   pausedAutoScroll: boolean;
 }
 ```
@@ -104,12 +107,12 @@ On SSE 'event':
 
 ## Owners
 
-| Block | Owner |
-|-------|-------|
-| Single-mode UI upgrades + Swimlane UI | **obv-ds** (owns `public/index.html` + `app.js`) |
-| Server `since_seq` query param | **obv-ds** |
-| Multi-agent fleet driver + DOM-level validation script | **obv-flash** |
-| Spec, integration, headless screenshot, sign-off | **obv-claude** (me) |
+| Block                                                  | Owner                                            |
+| ------------------------------------------------------ | ------------------------------------------------ |
+| Single-mode UI upgrades + Swimlane UI                  | **obv-ds** (owns `public/index.html` + `app.js`) |
+| Server `since_seq` query param                         | **obv-ds**                                       |
+| Multi-agent fleet driver + DOM-level validation script | **obv-flash**                                    |
+| Spec, integration, headless screenshot, sign-off       | **obv-claude** (me)                              |
 
 ## Done criteria
 

@@ -8,6 +8,8 @@ web_modules/
 dist/
 build/
 out/
+coverage/
+pr-diagram-out/
 .tsbuildinfo
 *.tsbuildinfo
 
@@ -36,6 +38,21 @@ Thumbs.db
 storage/runs/
 *.log
 logs/
+
+# Pi runtime artifacts (pipeline definitions/templates/extensions remain tracked)
+# Docs creates a local agent-context symlink; the pipeline's scope receipt rejects symlinks.
+CLAUDE.md
+.pi/state/
+.pi/artifacts/
+.pi/logs/
+.pi/pipeline/
+
+# Browser/Python runtime artifacts
+.playwright-mcp/
+playwright-report/
+test-results/
+__pycache__/
+*.pyc
 
 # IDE files
 .vscode/

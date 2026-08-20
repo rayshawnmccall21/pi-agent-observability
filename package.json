@@ -1,12 +1,66 @@
 {
   "name": "pi-agent-observability",
   "version": "0.1.0",
-  "private": true,
-  "keywords": ["pi-package"],
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
-  },
+  "description": "Live Pi agent observability extension, server, and browser dashboard.",
+  "type": "module",
+  "main": "extension/pi-observability.ts",
+  "files": [
+    "apps/",
+    "extension/",
+    "shared/",
+    "src/",
+    "scripts/",
+    "README.md"
+  ],
   "pi": {
-    "extensions": ["extension"]
+    "extensions": [
+      "extension/pi-observability.ts"
+    ]
+  },
+  "scripts": {
+    "build": "tsc && bun build src/browser-api.ts --target=browser --format=iife --outfile=apps/observability/public/transcript.js && prettier --write apps/observability/public/transcript.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/ tests/ scripts/validate-swimlane.ts --max-warnings 0",
+    "lint:fix": "eslint src/ tests/ scripts/validate-swimlane.ts --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "node scripts/run-transcript-e2e.mjs",
+    "crap": "vitest run --coverage && node scripts/crap-report.mjs",
+    "crap:ratchet": "node scripts/crap-ratchet.mjs",
+    "crap:update-baseline": "node scripts/crap-ratchet.mjs --update-baseline",
+    "knip": "knip",
+    "quality:lock": "node scripts/validate-quality-gates.mjs --lock",
+    "quality:probe": "node scripts/validate-quality-gates.mjs",
+    "check": "npm run quality:lock && npm run typecheck && npm run format:check && npm run lint && npm run test:coverage && npm run crap && npm run knip && npm run test:e2e"
+  },
+  "keywords": [
+    "pi",
+    "observability",
+    "agents",
+    "telemetry",
+    "dashboard"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@playwright/test": "^1.62.1",
+    "@types/bun": "latest",
+    "@types/node": "^25.7.0",
+    "@vitest/coverage-v8": "^3.0.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-jsdoc": "^62.9.0",
+    "eslint-plugin-sonarjs": "^4.0.3",
+    "eslint-plugin-tsdoc": "^0.5.2",
+    "eslint-plugin-unicorn": "^64.0.0",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "eslint-plugin-vitest": "^0.5.4",
+    "knip": "^5.0.0",
+    "prettier": "^3.5.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.59.3",
+    "vitest": "^3.0.0"
   }
 }

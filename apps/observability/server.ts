@@ -9,7 +9,7 @@ import { Database } from "bun:sqlite";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { createDb, prepare, toRow, toSessionRow, rowToSession, rowToEvent } from "./db.js";
-import { MAX_REQUEST_BYTES } from "../../shared/types.js";
+import { MAX_REQUEST_BYTES, validateObsEvent } from "../../shared/types.js";
 import type { ObsEvent } from "../../shared/types.js";
 
 // ─── Config ─────────────────────────────────────────────────────────────────
@@ -164,11 +164,30 @@ function ingestEvent(event: ObsEvent): string | null {
 // ─── Request body reader with size cap ─────────────────────────────────────
 
 async function readBody(req: Request): Promise<string> {
-  const len = parseInt(req.headers.get("content-length") ?? "0", 10);
-  if (len > MAX_REQUEST_BYTES) {
+  const declaredBytes = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declaredBytes) && declaredBytes > MAX_REQUEST_BYTES) {
     throw new Error("Payload too large");
   }
-  return await req.text();
+  const reader = req.body?.getReader();
+  if (!reader) return "";
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let bodyText = "";
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytesRead += chunk.value.byteLength;
+      if (bytesRead > MAX_REQUEST_BYTES) {
+        await reader.cancel();
+        throw new Error("Payload too large");
+      }
+      bodyText += decoder.decode(chunk.value, { stream: true });
+    }
+    return bodyText + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 // ─── MIME types for static files ────────────────────────────────────────────
@@ -278,26 +297,33 @@ async function handle(req: Request): Promise<Response> {
       return jsonResponse({ error: "invalid JSON" }, 400);
     }
 
-    const events: ObsEvent[] = Array.isArray(parsed) ? parsed : [parsed];
+    const events: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
     const ingested: string[] = [];
     const rejected: string[] = [];
 
-    for (const evt of events) {
-      if (!evt || typeof evt !== "object" || !evt.event_id || !evt.type) {
-        rejected.push(evt?.event_id ?? "unknown");
+    for (const candidate of events) {
+      let event: ObsEvent | null;
+      try {
+        event = validateObsEvent(candidate) ? candidate : null;
+      } catch {
+        event = null;
+      }
+      if (!event) {
+        rejected.push(
+          candidate &&
+            typeof candidate === "object" &&
+            "event_id" in candidate &&
+            typeof candidate.event_id === "string"
+            ? candidate.event_id
+            : "unknown",
+        );
         continue;
       }
-      // Normalize defaults
-      evt.pool = evt.pool ?? "default";
-      evt.tags = evt.tags ?? [];
-      evt.seq = typeof evt.seq === "number" ? evt.seq : 0;
-      evt.cwd = evt.cwd ?? "";
-
-      const ingestedId = ingestEvent(evt as ObsEvent);
+      const ingestedId = ingestEvent(event);
       if (ingestedId) {
         ingested.push(ingestedId);
       } else {
-        rejected.push(evt.event_id);
+        rejected.push(event.event_id);
       }
     }
 
@@ -315,9 +341,7 @@ async function handle(req: Request): Promise<Response> {
       const rows = q.listSessions.all({ $pool: pool, $tag: tag, $limit: limit }) as any[];
 
       // Filter by `since` in application code (optional low-frequency filter)
-      const sessions = rows
-        .filter((r) => !since || r.last_ts >= since)
-        .map(rowToSession);
+      const sessions = rows.filter((r) => !since || r.last_ts >= since).map(rowToSession);
 
       return jsonResponse({ sessions });
     } catch (err: any) {
@@ -395,7 +419,9 @@ async function handle(req: Request): Promise<Response> {
 
         // Initial hello
         const hello = JSON.stringify({ server: "pi-observability", version: VERSION });
-        controller.enqueue(new TextEncoder().encode(`retry: 5000\nevent: hello\ndata: ${hello}\n\n`));
+        controller.enqueue(
+          new TextEncoder().encode(`retry: 5000\nevent: hello\ndata: ${hello}\n\n`),
+        );
       },
       cancel() {
         removeSubscriber(subId!);
@@ -406,7 +432,7 @@ async function handle(req: Request): Promise<Response> {
       headers: {
         "content-type": "text/event-stream",
         "cache-control": "no-cache",
-        "connection": "keep-alive",
+        connection: "keep-alive",
         "access-control-allow-origin": "*",
       },
     });
@@ -421,6 +447,7 @@ async function handle(req: Request): Promise<Response> {
 Bun.serve({
   port: PORT,
   hostname: HOST,
+  idleTimeout: 20,
   fetch: handle,
 });
 
