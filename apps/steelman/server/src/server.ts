@@ -21,7 +21,8 @@ fs.mkdirSync(RUNS_DIR, { recursive: true });
 fs.mkdirSync(SESSION_DIR, { recursive: true });
 
 type Role = "user" | "assistant" | "system";
-type ArtifactKind = "text" | "table" | "bar-chart" | "pie-chart" | "html" | "trend" | "scorecard" | "risk-map";
+type ArtifactKind =
+  "text" | "table" | "bar-chart" | "pie-chart" | "html" | "trend" | "scorecard" | "risk-map";
 
 interface ChatMessage {
   id: string;
@@ -77,7 +78,14 @@ type ProductEvent =
   | { type: "artifact"; artifact: Artifact }
   | { type: "message_refs"; id: string; references: Reference[] }
   | { type: "status"; status: Run["status"]; message?: string }
-  | { type: "tool"; phase: "start" | "update" | "end"; name: string; toolCallId?: string; text?: string; isError?: boolean }
+  | {
+      type: "tool";
+      phase: "start" | "update" | "end";
+      name: string;
+      toolCallId?: string;
+      text?: string;
+      isError?: boolean;
+    }
   | { type: "obs"; obsUrl: string; piSessionId?: string }
   | { type: "error"; message: string };
 
@@ -92,17 +100,26 @@ function snapshot(run: Run): RunSnapshot {
   return rest;
 }
 
-function now() { return new Date().toISOString(); }
+function now() {
+  return new Date().toISOString();
+}
 
 function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json", "access-control-allow-origin": "*", ...extraHeaders },
+    headers: {
+      "content-type": "application/json",
+      "access-control-allow-origin": "*",
+      ...extraHeaders,
+    },
   });
 }
 
 function text(body: string, status = 200, contentType = "text/plain; charset=utf-8") {
-  return new Response(body, { status, headers: { "content-type": contentType, "access-control-allow-origin": "*" } });
+  return new Response(body, {
+    status,
+    headers: { "content-type": contentType, "access-control-allow-origin": "*" },
+  });
 }
 
 function emit(run: Run, event: ProductEvent) {
@@ -112,7 +129,11 @@ function emit(run: Run, event: ProductEvent) {
   persistRun(run);
   const frame = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
   for (const sub of subscribers.get(run.id) || []) {
-    try { sub.enqueue(encoder.encode(frame)); } catch { /* closed */ }
+    try {
+      sub.enqueue(encoder.encode(frame));
+    } catch {
+      /* closed */
+    }
   }
 }
 
@@ -190,7 +211,14 @@ function addReferences(run: Run, incoming: Array<Partial<Reference>>): Reference
 }
 
 function cleanRef(value: string): string {
-  return String(value).replace(/^@+/, "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "artifact";
+  return (
+    String(value)
+      .replace(/^@+/, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "artifact"
+  );
 }
 
 function persistRun(run: Run) {
@@ -240,11 +268,14 @@ async function parseJson(req: Request) {
 function startAgent(run: Run, prompt: string) {
   const agent = new PiRpcAgent(run);
   run.agent = agent;
-  agent.start().then(() => agent.prompt(prompt)).catch((err) => {
-    run.error = err?.message || String(err);
-    appendChat(run, "system", `Agent failed to start: ${run.error}`);
-    setStatus(run, "error", run.error);
-  });
+  agent
+    .start()
+    .then(() => agent.prompt(prompt))
+    .catch((err) => {
+      run.error = err?.message || String(err);
+      appendChat(run, "system", `Agent failed to start: ${run.error}`);
+      setStatus(run, "error", run.error);
+    });
 }
 
 class JsonlReader {
@@ -274,14 +305,21 @@ class PiRpcAgent {
     const obsExt = path.join(ROOT, "extension", "pi-observability.ts");
     const productExt = path.join(APP_ROOT, "extension", "steelman-product.ts");
     const args = [
-      "--mode", "rpc",
-      "--session-dir", SESSION_DIR,
+      "--mode",
+      "rpc",
+      "--session-dir",
+      SESSION_DIR,
       "--no-builtin-tools",
-      "-e", obsExt,
-      "-e", productExt,
-      "--o-pool", "product-steelman",
-      "--o-tag", `product,steelman,run-${this.run.id}`,
-      "--o-name", `steelman-${this.run.id}`,
+      "-e",
+      obsExt,
+      "-e",
+      productExt,
+      "--o-pool",
+      "product-steelman",
+      "--o-tag",
+      `product,steelman,run-${this.run.id}`,
+      "--o-name",
+      `steelman-${this.run.id}`,
     ];
     if (STEELMAN_PROVIDER) args.push("--provider", STEELMAN_PROVIDER);
     if (STEELMAN_MODEL) args.push("--model", STEELMAN_MODEL);
@@ -302,7 +340,11 @@ class PiRpcAgent {
       JITI_CACHE_DIR: path.join("/tmp", `steelman-jiti-${this.run.id}`),
     };
 
-    this.proc = spawn(process.env.STEELMAN_PI_BIN || "pi", args, { cwd: APP_ROOT, env, stdio: ["pipe", "pipe", "pipe"] });
+    this.proc = spawn(process.env.STEELMAN_PI_BIN || "pi", args, {
+      cwd: APP_ROOT,
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     this.started = true;
     setStatus(this.run, "running", "Pi RPC agent started");
 
@@ -320,7 +362,13 @@ class PiRpcAgent {
     this.proc.stdout.on("data", (d) => reader.push(d));
     this.proc.stderr.on("data", (d) => {
       const msg = d.toString().trim();
-      if (msg) emit(this.run, { type: "tool", phase: "update", name: "pi-stderr", text: msg.slice(0, 2000) });
+      if (msg)
+        emit(this.run, {
+          type: "tool",
+          phase: "update",
+          name: "pi-stderr",
+          text: msg.slice(0, 2000),
+        });
     });
     this.proc.on("error", (err) => {
       this.run.error = err.message;
@@ -329,7 +377,8 @@ class PiRpcAgent {
     });
     this.proc.on("close", (code) => {
       clearTimeout(timeout);
-      if (this.run.status === "running") setStatus(this.run, code === 0 ? "done" : "error", `Pi exited with code ${code}`);
+      if (this.run.status === "running")
+        setStatus(this.run, code === 0 ? "done" : "error", `Pi exited with code ${code}`);
     });
 
     this.send({ type: "get_state", id: randomUUID() });
@@ -347,7 +396,11 @@ class PiRpcAgent {
 
   private handleLine(line: string) {
     let evt: any;
-    try { evt = JSON.parse(line); } catch { return; }
+    try {
+      evt = JSON.parse(line);
+    } catch {
+      return;
+    }
 
     if (evt.type === "response" && evt.command === "get_state" && evt.data?.sessionId) {
       this.run.piSessionId = evt.data.sessionId;
@@ -362,7 +415,9 @@ class PiRpcAgent {
       return;
     }
     if (evt.type === "agent_end") {
-      const msg = this.currentAssistantId ? this.run.chat.find((m) => m.id === this.currentAssistantId) : undefined;
+      const msg = this.currentAssistantId
+        ? this.run.chat.find((m) => m.id === this.currentAssistantId)
+        : undefined;
       if (msg) msg.pending = false;
       setStatus(this.run, "done", "Steelman complete");
       return;
@@ -371,7 +426,8 @@ class PiRpcAgent {
       const delta = evt.assistantMessageEvent;
       if (!delta) return;
       if (delta.type === "text_delta" && delta.delta) {
-        if (!this.currentAssistantId) this.currentAssistantId = appendChat(this.run, "assistant", "", true).id;
+        if (!this.currentAssistantId)
+          this.currentAssistantId = appendChat(this.run, "assistant", "", true).id;
         appendDelta(this.run, this.currentAssistantId, delta.delta);
       }
       if (delta.type === "thinking_delta" && delta.delta) {
@@ -382,20 +438,41 @@ class PiRpcAgent {
     if (evt.type === "message_end" && evt.message?.role === "assistant") {
       const text = extractAssistantText(evt.message);
       if (!this.currentAssistantId && text) appendChat(this.run, "assistant", text);
-      const msg = this.currentAssistantId ? this.run.chat.find((m) => m.id === this.currentAssistantId) : undefined;
+      const msg = this.currentAssistantId
+        ? this.run.chat.find((m) => m.id === this.currentAssistantId)
+        : undefined;
       if (msg) msg.pending = false;
       return;
     }
     if (evt.type === "tool_execution_start") {
-      emit(this.run, { type: "tool", phase: "start", name: evt.toolName, toolCallId: evt.toolCallId, text: JSON.stringify(evt.args || {}) });
+      emit(this.run, {
+        type: "tool",
+        phase: "start",
+        name: evt.toolName,
+        toolCallId: evt.toolCallId,
+        text: JSON.stringify(evt.args || {}),
+      });
       return;
     }
     if (evt.type === "tool_execution_update") {
-      emit(this.run, { type: "tool", phase: "update", name: evt.toolName, toolCallId: evt.toolCallId, text: contentText(evt.partialResult?.content) });
+      emit(this.run, {
+        type: "tool",
+        phase: "update",
+        name: evt.toolName,
+        toolCallId: evt.toolCallId,
+        text: contentText(evt.partialResult?.content),
+      });
       return;
     }
     if (evt.type === "tool_execution_end") {
-      emit(this.run, { type: "tool", phase: "end", name: evt.toolName, toolCallId: evt.toolCallId, text: contentText(evt.result?.content), isError: !!evt.isError });
+      emit(this.run, {
+        type: "tool",
+        phase: "end",
+        name: evt.toolName,
+        toolCallId: evt.toolCallId,
+        text: contentText(evt.result?.content),
+        isError: !!evt.isError,
+      });
       return;
     }
     if (evt.type === "extension_error") {
@@ -404,18 +481,29 @@ class PiRpcAgent {
   }
 }
 
-function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 function contentText(content: any): string {
   if (!content) return "";
   if (typeof content === "string") return content;
-  if (Array.isArray(content)) return content.map((b) => b?.text || b?.content || "").join("\n").trim();
+  if (Array.isArray(content))
+    return content
+      .map((b) => b?.text || b?.content || "")
+      .join("\n")
+      .trim();
   return JSON.stringify(content);
 }
 
 function extractAssistantText(message: any): string {
   if (typeof message?.content === "string") return message.content;
-  if (Array.isArray(message?.content)) return message.content.filter((b: any) => b.type === "text").map((b: any) => b.text || "").join("\n").trim();
+  if (Array.isArray(message?.content))
+    return message.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text || "")
+      .join("\n")
+      .trim();
   return "";
 }
 
@@ -430,10 +518,17 @@ function subscribe(run: Run) {
       // Snapshot is the replay: it contains full chat, artifact, status, and
       // observability-link state. Do not replay historical chat_delta events on
       // reconnect, or the browser would append duplicate text to the snapshot.
-      controller.enqueue(encoder.encode(`retry: 2000\nevent: run\ndata: ${JSON.stringify({ type: "run", run: snapshot(run) })}\n\n`));
+      controller.enqueue(
+        encoder.encode(
+          `retry: 2000\nevent: run\ndata: ${JSON.stringify({ type: "run", run: snapshot(run) })}\n\n`,
+        ),
+      );
       heartbeat = setInterval(() => {
-        try { controller.enqueue(encoder.encode(": ping\n\n")); }
-        catch { subscribers.get(run.id)?.delete(controller); }
+        try {
+          controller.enqueue(encoder.encode(": ping\n\n"));
+        } catch {
+          subscribers.get(run.id)?.delete(controller);
+        }
       }, 15_000);
     },
     cancel() {
@@ -445,7 +540,7 @@ function subscribe(run: Run) {
     headers: {
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
-      "connection": "keep-alive",
+      connection: "keep-alive",
       "access-control-allow-origin": "*",
     },
   });
@@ -456,11 +551,14 @@ async function handle(req: Request): Promise<Response> {
   const method = req.method.toUpperCase();
 
   if (method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: {
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET, POST, OPTIONS",
-      "access-control-allow-headers": "Authorization, Content-Type",
-    }});
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "Authorization, Content-Type",
+      },
+    });
   }
 
   if (url.pathname === "/health") return json({ ok: true, app: "steelman", runs: runs.size });
@@ -504,7 +602,8 @@ async function handle(req: Request): Promise<Response> {
   const artifactMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/artifacts$/);
   if (artifactMatch && method === "POST") {
     const auth = req.headers.get("authorization") || "";
-    if (INTERNAL_TOKEN && auth !== `Bearer ${INTERNAL_TOKEN}`) return json({ error: "unauthorized" }, 401);
+    if (INTERNAL_TOKEN && auth !== `Bearer ${INTERNAL_TOKEN}`)
+      return json({ error: "unauthorized" }, 401);
     const run = runs.get(artifactMatch[1]);
     if (!run) return json({ error: "run not found" }, 404);
     const body = await parseJson(req);
@@ -515,11 +614,16 @@ async function handle(req: Request): Promise<Response> {
   const referenceMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/references$/);
   if (referenceMatch && method === "POST") {
     const auth = req.headers.get("authorization") || "";
-    if (INTERNAL_TOKEN && auth !== `Bearer ${INTERNAL_TOKEN}`) return json({ error: "unauthorized" }, 401);
+    if (INTERNAL_TOKEN && auth !== `Bearer ${INTERNAL_TOKEN}`)
+      return json({ error: "unauthorized" }, 401);
     const run = runs.get(referenceMatch[1]);
     if (!run) return json({ error: "run not found" }, 404);
     const body = await parseJson(req);
-    const incoming = Array.isArray(body) ? body : Array.isArray(body?.references) ? body.references : [body];
+    const incoming = Array.isArray(body)
+      ? body
+      : Array.isArray(body?.references)
+        ? body.references
+        : [body];
     const references = addReferences(run, incoming);
     return json({ references }, 201);
   }
@@ -538,5 +642,7 @@ Bun.serve({
 });
 console.log(`Steelman server listening on http://${HOST}:${PORT}`);
 console.log("Mode: pi-rpc");
-console.log(`Model: ${STEELMAN_MODEL}${STEELMAN_PROVIDER ? ` (provider=${STEELMAN_PROVIDER})` : ""}`);
+console.log(
+  `Model: ${STEELMAN_MODEL}${STEELMAN_PROVIDER ? ` (provider=${STEELMAN_PROVIDER})` : ""}`,
+);
 console.log(`Observability: ${OBS_SERVER_URL} pool=product-steelman`);

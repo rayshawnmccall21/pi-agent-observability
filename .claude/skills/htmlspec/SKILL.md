@@ -28,7 +28,7 @@ USER_PROMPT: $1
 ALL_ARGUMENTS: $ARGUMENTS
 PLAN_OUTPUT_DIRECTORY: `specs/`
 PLAN_SLUG: kebab-case name derived from the plan topic (e.g. `in-memory-ttl-lru-cache`)
-HTML_OUTPUT: `specs/htmlspec-<PLAN_SLUG>.html`  — **the filename MUST always begin with the `htmlspec-` prefix**
+HTML_OUTPUT: `specs/htmlspec-<PLAN_SLUG>.html` — **the filename MUST always begin with the `htmlspec-` prefix**
 
 ## Instructions
 
@@ -56,7 +56,7 @@ anywhere else a visual would help more than prose — you have **full creative l
 any HTML you want**. This is the most valuable part of the page: with no image generation,
 freeform is where the plan earns its richness, so **lean into it heavily**.
 
-- **Communicate concrete implementation work.** Freeform is not decoration — it is where another developer learns *exactly* what to build. Encode the things prose makes muddy: file paths to touch, function signatures with full type info, data shapes (request/response/DB rows), the precise sequence of operations, decision points with the chosen branch, edge cases and what happens at each, error/timeout/retry behavior, ordering and concurrency constraints, before/after diffs, migration steps, and any invariants the implementation must preserve. Always prefer specific over abstract — names, types, numbers, paths.
+- **Communicate concrete implementation work.** Freeform is not decoration — it is where another developer learns _exactly_ what to build. Encode the things prose makes muddy: file paths to touch, function signatures with full type info, data shapes (request/response/DB rows), the precise sequence of operations, decision points with the chosen branch, edge cases and what happens at each, error/timeout/retry behavior, ordering and concurrency constraints, before/after diffs, migration steps, and any invariants the implementation must preserve. Always prefer specific over abstract — names, types, numbers, paths.
 - **Use a wide variety of HTML tags to convey meaning.** Different ideas deserve different shapes. Reach for:
   - `<details>`/`<summary>` for expandable deep-dives, alternative-considered-and-rejected, and FAQ-style "why not X".
   - `<table>` for comparison matrices (option A vs B vs C), API contracts (field · type · required · description), decision matrices (criterion × option), and before/after columns.
@@ -76,17 +76,21 @@ freeform is where the plan earns its richness, so **lean into it heavily**.
 ## Workflow
 
 ### Phase 1 — Plan
+
 1. THINK HARD: parse the USER_PROMPT; settle task type, complexity, and the architecture.
 2. Explore the codebase for patterns and relevant files.
 3. Decide the section set and the PLAN_SLUG.
 
 ### Phase 2 — Author the HTML
+
 4. Create `specs/` if missing. Write `specs/htmlspec-<PLAN_SLUG>.html` from the **HTML Plan Template**, filling every applicable section with detailed content. Emit no `<figure>`/`<img>` elements — this skill is text-only.
 
 ### Phase 3 — Freeform enrichment
+
 5. Author the **Freeform** section and any in-section enrichments per the **Freeform Instruction Set** above — inline SVG/CSS/JS, self-contained, on-theme, additive.
 
 ### Phase 4 — Finish
+
 6. Validate the HTML is well-formed (see Validation).
 7. Follow the **Report Format**.
 
@@ -98,120 +102,216 @@ shared theme); fill the `{{…}}` slots; drop the conditional sections that don'
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Plan: {{TASK_NAME}}</title>
-<style>
-  :root{
-    --bg:#0A0E1A; --panel:#111726; --ink:#F5F5F0; --muted:#9AA4B2;
-    --cyan:#22D3EE; --amber:#F59E0B; --red:#EF4444; --line:#1E2A3C;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-       font:16px/1.65 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:980px;margin:0 auto;padding:48px 24px 96px}
-  header.hero{text-align:center;margin-bottom:36px}
-  header.hero h1{font-size:2.2rem;margin:0 0 10px;letter-spacing:-.02em}
-  .meta{color:var(--muted);font-size:.9rem}
-  .badge{display:inline-block;background:var(--cyan);color:#001018;border-radius:999px;
-         padding:2px 11px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
-          padding:24px 28px;margin:20px 0}
-  section>h2{margin:0 0 14px;color:var(--cyan);font-size:1.3rem;
-             border-bottom:1px solid var(--line);padding-bottom:10px}
-  ul,ol{padding-left:22px}
-  li{margin:4px 0}
-  table{width:100%;border-collapse:collapse;margin:12px 0}
-  th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
-  th{background:#0d1422;color:var(--cyan)}
-  pre{background:#0d1422;border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto}
-  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em}
-  :not(pre)>code{background:#0d1422;border:1px solid var(--line);border-radius:6px;
-                 padding:2px 6px;color:var(--amber)}
-  .freeform{border-style:dashed;border-color:var(--cyan)}
-  .freeform>h2::after{content:" · author anything that helps";color:var(--muted);
-                      font-size:.7rem;font-weight:400;text-transform:none}
-  a{color:var(--cyan)}
-</style>
-</head>
-<body>
-<div class="wrap">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plan: {{TASK_NAME}}</title>
+    <style>
+      :root {
+        --bg: #0a0e1a;
+        --panel: #111726;
+        --ink: #f5f5f0;
+        --muted: #9aa4b2;
+        --cyan: #22d3ee;
+        --amber: #f59e0b;
+        --red: #ef4444;
+        --line: #1e2a3c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          16px/1.65 -apple-system,
+          Segoe UI,
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 48px 24px 96px;
+      }
+      header.hero {
+        text-align: center;
+        margin-bottom: 36px;
+      }
+      header.hero h1 {
+        font-size: 2.2rem;
+        margin: 0 0 10px;
+        letter-spacing: -0.02em;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .badge {
+        display: inline-block;
+        background: var(--cyan);
+        color: #001018;
+        border-radius: 999px;
+        padding: 2px 11px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 24px 28px;
+        margin: 20px 0;
+      }
+      section > h2 {
+        margin: 0 0 14px;
+        color: var(--cyan);
+        font-size: 1.3rem;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 10px;
+      }
+      ul,
+      ol {
+        padding-left: 22px;
+      }
+      li {
+        margin: 4px 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+      }
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 8px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #0d1422;
+        color: var(--cyan);
+      }
+      pre {
+        background: #0d1422;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        overflow: auto;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.86em;
+      }
+      :not(pre) > code {
+        background: #0d1422;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 2px 6px;
+        color: var(--amber);
+      }
+      .freeform {
+        border-style: dashed;
+        border-color: var(--cyan);
+      }
+      .freeform > h2::after {
+        content: " · author anything that helps";
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 400;
+        text-transform: none;
+      }
+      a {
+        color: var(--cyan);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <h1>Plan: {{TASK_NAME}}</h1>
+        <p class="meta"><span class="badge">{{TASK_TYPE}}</span> &middot; {{COMPLEXITY}}</p>
+      </header>
 
-  <header class="hero">
-    <h1>Plan: {{TASK_NAME}}</h1>
-    <p class="meta"><span class="badge">{{TASK_TYPE}}</span> &middot; {{COMPLEXITY}}</p>
-  </header>
+      <section>
+        <h2>Task Description</h2>
+        {{TASK_DESCRIPTION_HTML}}
+      </section>
 
-  <section>
-    <h2>Task Description</h2>
-    {{TASK_DESCRIPTION_HTML}}
-  </section>
+      <section>
+        <h2>Objective</h2>
+        {{OBJECTIVE_HTML}}
+      </section>
 
-  <section>
-    <h2>Objective</h2>
-    {{OBJECTIVE_HTML}}
-  </section>
+      <!-- include if task_type is feature OR complexity is medium/complex -->
+      <section>
+        <h2>Problem Statement</h2>
+        {{PROBLEM_STATEMENT_HTML}}
+      </section>
 
-  <!-- include if task_type is feature OR complexity is medium/complex -->
-  <section>
-    <h2>Problem Statement</h2>
-    {{PROBLEM_STATEMENT_HTML}}
-  </section>
+      <section>
+        <h2>Solution Approach</h2>
+        {{SOLUTION_APPROACH_HTML}}
+      </section>
+      <!-- /conditional -->
 
-  <section>
-    <h2>Solution Approach</h2>
-    {{SOLUTION_APPROACH_HTML}}
-  </section>
-  <!-- /conditional -->
+      <section>
+        <h2>Relevant Files</h2>
+        {{RELEVANT_FILES_HTML}}
+        <!-- include an h3 'New Files' list if needed -->
+      </section>
 
-  <section>
-    <h2>Relevant Files</h2>
-    {{RELEVANT_FILES_HTML}}  <!-- include an h3 'New Files' list if needed -->
-  </section>
+      <!-- include if complexity is medium/complex -->
+      <section>
+        <h2>Implementation Phases</h2>
+        {{PHASES_HTML}}
+        <!-- Phase 1: Foundation / Phase 2: Core / Phase 3: Integration & Polish -->
+      </section>
+      <!-- /conditional -->
 
-  <!-- include if complexity is medium/complex -->
-  <section>
-    <h2>Implementation Phases</h2>
-    {{PHASES_HTML}}  <!-- Phase 1: Foundation / Phase 2: Core / Phase 3: Integration & Polish -->
-  </section>
-  <!-- /conditional -->
+      <section>
+        <h2>Step by Step Tasks</h2>
+        {{STEPS_HTML}}
+        <!-- ordered list; foundational first; last step validates the work -->
+      </section>
 
-  <section>
-    <h2>Step by Step Tasks</h2>
-    {{STEPS_HTML}}  <!-- ordered list; foundational first; last step validates the work -->
-  </section>
+      <!-- include if task_type is feature OR complexity is medium/complex -->
+      <section>
+        <h2>Testing Strategy</h2>
+        {{TESTING_HTML}}
+      </section>
+      <!-- /conditional -->
 
-  <!-- include if task_type is feature OR complexity is medium/complex -->
-  <section>
-    <h2>Testing Strategy</h2>
-    {{TESTING_HTML}}
-  </section>
-  <!-- /conditional -->
+      <section>
+        <h2>Acceptance Criteria</h2>
+        {{ACCEPTANCE_HTML}}
+        <!-- specific, measurable -->
+      </section>
 
-  <section>
-    <h2>Acceptance Criteria</h2>
-    {{ACCEPTANCE_HTML}}  <!-- specific, measurable -->
-  </section>
+      <section>
+        <h2>Validation Commands</h2>
+        <pre><code>{{VALIDATION_COMMANDS}}</code></pre>
+      </section>
 
-  <section>
-    <h2>Validation Commands</h2>
-    <pre><code>{{VALIDATION_COMMANDS}}</code></pre>
-  </section>
+      <!-- FREEFORM ZONE: author ANY self-contained, on-theme HTML/CSS/SVG/JS that aids the plan -->
+      <section class="freeform">
+        <h2>Freeform</h2>
+        {{FREEFORM_HTML}}
+      </section>
 
-  <!-- FREEFORM ZONE: author ANY self-contained, on-theme HTML/CSS/SVG/JS that aids the plan -->
-  <section class="freeform">
-    <h2>Freeform</h2>
-    {{FREEFORM_HTML}}
-  </section>
-
-  <section>
-    <h2>Notes</h2>
-    {{NOTES_HTML}}  <!-- dependencies (uv add ...), external assets used by freeform, caveats -->
-  </section>
-
-</div>
-</body>
+      <section>
+        <h2>Notes</h2>
+        {{NOTES_HTML}}
+        <!-- dependencies (uv add ...), external assets used by freeform, caveats -->
+      </section>
+    </div>
+  </body>
 </html>
 ```
 
@@ -220,11 +320,12 @@ shared theme); fill the `{{…}}` slots; drop the conditional sections that don'
 ```markdown
 ✅ HTML Implementation Plan Created (text-only)
 
-File: specs/htmlspec-<PLAN_SLUG>.html  (open in a browser)
+File: specs/htmlspec-<PLAN_SLUG>.html (open in a browser)
 Topic: <brief description of what the plan covers>
 Freeform: <one line on what custom HTML you added, if any>
 
 Key Components:
+
 - <main component 1>
 - <main component 2>
 - <main component 3>

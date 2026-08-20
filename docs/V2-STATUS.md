@@ -3,6 +3,7 @@
 ## What works end-to-end (validated in a real Chromium via Playwright)
 
 ### Single mode
+
 - Rich per-type rendering for **all 14 event types** with colored pills (session, agent, turn, user, assistant, thinking, tool_call, tool_result, model_change, error, custom).
 - Search box (substring match over summary + payload JSON).
 - Filter chips for 7 main event types (multi-select, AND with search).
@@ -11,6 +12,7 @@
 - Auto-scroll with manual pause when user scrolls up.
 
 ### Swimlane mode
+
 - View toggle in header, persisted in `localStorage`.
 - Sidebar: multi-select with checkboxes; "auto-add new lanes" toggle.
 - Side-by-side **vertical** lane columns (one per selected session). 6 lanes shown live; horizontal scrolls if more.
@@ -21,16 +23,17 @@
 - Auto-add: new sessions matching pool/tag filters appear as new lanes within ~1s of their first event.
 
 ### Server v2 additions
+
 - `GET /sessions/:id/events?since_seq=N` — events with `seq > N`, ascending. Used for lane resync.
 - All v1 endpoints unchanged. `scripts/smoke-server.sh` still green.
 
 ## Artifacts (Playwright headless screenshots)
 
-| Path | What it shows |
-|------|----------------|
-| `artifacts/swimlane-3lanes-static.png` | 3 fleet sessions backfilled, each with 18–25 events |
-| `artifacts/swimlane-6lanes-live.png`  | 6 lanes after auto-add triggered on a fresh fleet — new lanes show `0–6s ago` while old show `>10min ago` |
-| `artifacts/single-mode-fleet.png`     | Single-mode rich rendering with filter chips + search + focused row + live indicator |
+| Path                                   | What it shows                                                                                             |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `artifacts/swimlane-3lanes-static.png` | 3 fleet sessions backfilled, each with 18–25 events                                                       |
+| `artifacts/swimlane-6lanes-live.png`   | 6 lanes after auto-add triggered on a fresh fleet — new lanes show `0–6s ago` while old show `>10min ago` |
+| `artifacts/single-mode-fleet.png`      | Single-mode rich rendering with filter chips + search + focused row + live indicator                      |
 
 ## Data plane validation (from `bun scripts/validate-swimlane.ts`)
 
@@ -45,12 +48,12 @@
 
 ## Bugs caught during validation + who caught them
 
-| Bug | Where | Caught by | Fix |
-|---|---|---|---|
-| `const swimlaneContainer` redeclared between `app.js` and `swimlane.js` → all of swimlane.js failed to load → swimlane mode silently broken | `server/public/swimlane.js:14` | me (obv-claude) via Chromium console | Removed redundant `const` in swimlane.js — both scripts share global scope as classic `<script>` tags |
-| `selectSession` (and view-toggle restore) called `fetchSessionEvents(sid)` fire-and-forget instead of capturing the return value → single-mode event view empty | `server/public/app.js:199` and `:136` | me (obv-claude) via DOM-level Playwright eval | `.then(events => { STATE.events = events; renderEvents(); })` |
-| `favicon.ico` returns 500 (no static handler) | `server/server.ts` | console error noise | left as nit, not blocking |
-| Filter chip click toggles state but the `.active` CSS class isn't painted on the chip | `app.js` chip click handler | me | left as cosmetic nit |
+| Bug                                                                                                                                                             | Where                                 | Caught by                                     | Fix                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `const swimlaneContainer` redeclared between `app.js` and `swimlane.js` → all of swimlane.js failed to load → swimlane mode silently broken                     | `server/public/swimlane.js:14`        | me (obv-claude) via Chromium console          | Removed redundant `const` in swimlane.js — both scripts share global scope as classic `<script>` tags |
+| `selectSession` (and view-toggle restore) called `fetchSessionEvents(sid)` fire-and-forget instead of capturing the return value → single-mode event view empty | `server/public/app.js:199` and `:136` | me (obv-claude) via DOM-level Playwright eval | `.then(events => { STATE.events = events; renderEvents(); })`                                         |
+| `favicon.ico` returns 500 (no static handler)                                                                                                                   | `server/server.ts`                    | console error noise                           | left as nit, not blocking                                                                             |
+| Filter chip click toggles state but the `.active` CSS class isn't painted on the chip                                                                           | `app.js` chip click handler           | me                                            | left as cosmetic nit                                                                                  |
 
 The first two are real blockers; both were applied directly because they were < 5 lines. The latter two are punted to v2.1.
 
@@ -71,8 +74,8 @@ The first two are real blockers; both were applied directly because they were < 
 
 ## Build credits
 
-| Block | Owner |
-|---|---|
+| Block                                                                      | Owner           |
+| -------------------------------------------------------------------------- | --------------- |
 | Spec (`docs/SPEC-V2-UI.md`), Playwright validation, two surgical bug fixes | obv-claude (me) |
-| Server `since_seq` + `app.js` + `swimlane.js` UI rewrite | obv-ds |
-| `scripts/spawn-fleet.sh` + `scripts/validate-swimlane.ts` | obv-flash |
+| Server `since_seq` + `app.js` + `swimlane.js` UI rewrite                   | obv-ds          |
+| `scripts/spawn-fleet.sh` + `scripts/validate-swimlane.ts`                  | obv-flash       |

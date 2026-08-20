@@ -57,19 +57,19 @@ Spawns the backend and drives one real Pi-RPC run end-to-end — asserts chat `@
 
 Backend:
 
-| Var | Default | Purpose |
-|---|---:|---|
-| `STEELMAN_PORT` | `45210` | Bun API port |
-| `STEELMAN_HOST` | `127.0.0.1` | Bun API host |
-| `STEELMAN_PI_BIN` | `pi` | Pi executable |
-| `STEELMAN_AGENT_MODEL` | `gemini-3.5-flash` | `--model` passed to Pi |
-| `STEELMAN_AGENT_MODEL_PROVIDER` | `google` | `--provider` passed to Pi |
-| `OBS_SERVER_URL` | `http://127.0.0.1:43190` | Observability server URL |
-| `OBS_AUTH_TOKEN` | unset | Token forwarded to observability extension |
-| `FIRECRAWL_TIMEOUT_MS` | `20000` | Research tool timeout |
-| `FIRECRAWL_BIN` | `firecrawl` | Firecrawl executable; set to a missing name to force generic-search fallback in tests |
-| `STEELMAN_AGENT_TIMEOUT_MS` | `180000` | Max real Pi agent run time before backend marks it errored |
-| `STEELMAN_OBS_VIEW` | `single` | Observability deep-link view (`single` or `swimlane`) |
+| Var                             |                  Default | Purpose                                                                               |
+| ------------------------------- | -----------------------: | ------------------------------------------------------------------------------------- |
+| `STEELMAN_PORT`                 |                  `45210` | Bun API port                                                                          |
+| `STEELMAN_HOST`                 |              `127.0.0.1` | Bun API host                                                                          |
+| `STEELMAN_PI_BIN`               |                     `pi` | Pi executable                                                                         |
+| `STEELMAN_AGENT_MODEL`          |       `gemini-3.5-flash` | `--model` passed to Pi                                                                |
+| `STEELMAN_AGENT_MODEL_PROVIDER` |                 `google` | `--provider` passed to Pi                                                             |
+| `OBS_SERVER_URL`                | `http://127.0.0.1:43190` | Observability server URL                                                              |
+| `OBS_AUTH_TOKEN`                |                    unset | Token forwarded to observability extension                                            |
+| `FIRECRAWL_TIMEOUT_MS`          |                  `20000` | Research tool timeout                                                                 |
+| `FIRECRAWL_BIN`                 |              `firecrawl` | Firecrawl executable; set to a missing name to force generic-search fallback in tests |
+| `STEELMAN_AGENT_TIMEOUT_MS`     |                 `180000` | Max real Pi agent run time before backend marks it errored                            |
+| `STEELMAN_OBS_VIEW`             |                 `single` | Observability deep-link view (`single` or `swimlane`)                                 |
 
 ## Notes
 

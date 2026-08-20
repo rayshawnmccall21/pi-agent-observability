@@ -61,41 +61,40 @@ All events POSTed to `/events` follow this envelope:
 ```ts
 interface ObsEvent {
   // ── envelope ────────────────────────────────────────────────────
-  event_id:    string;        // uuid v4, client-generated
-  ts:          string;        // ISO-8601 with ms, client clock
-  type:        ObsEventType;  // see enum below
+  event_id: string; // uuid v4, client-generated
+  ts: string; // ISO-8601 with ms, client clock
+  type: ObsEventType; // see enum below
   // ── identity (who emitted it) ───────────────────────────────────
-  session_id:  string;        // pi session uuid
-  session_file?: string;      // absolute path to session.jsonl (if any)
-  cwd:         string;
-  agent_name?: string;        // optional human name (from --o-name)
-  pool?:       string;        // --o-pool, defaults to "default"
-  tags:        string[];      // --o-tag, may be repeated; always an array
+  session_id: string; // pi session uuid
+  session_file?: string; // absolute path to session.jsonl (if any)
+  cwd: string;
+  agent_name?: string; // optional human name (from --o-name)
+  pool?: string; // --o-pool, defaults to "default"
+  tags: string[]; // --o-tag, may be repeated; always an array
   // ── model ───────────────────────────────────────────────────────
-  provider?:   string;
-  model?:      string;
+  provider?: string;
+  model?: string;
   // ── payload (type-discriminated) ────────────────────────────────
-  payload:     unknown;
+  payload: unknown;
   // ── ordering ────────────────────────────────────────────────────
-  seq:         number;        // monotonic per session, starts at 0
+  seq: number; // monotonic per session, starts at 0
 }
 
 type ObsEventType =
-  | "session_start"            // payload: { reason, version, parentSession? }
-  | "session_shutdown"         // payload: { reason }
-  | "agent_start"              // payload: { prompt, images_count }
-  | "agent_end"                // payload: { message_count }
-  | "turn_start"               // payload: { turnIndex }
-  | "turn_end"                 // payload: { turnIndex, usage?, cost? }
-  | "user_message"             // payload: { content, images_count }
-  | "assistant_message"        // payload: { text, thinking, tool_calls, usage, cost, stopReason }
-  | "tool_call"                // payload: { tool_name, tool_call_id, args }
-  | "tool_result"              // payload: { tool_name, tool_call_id, content_text, is_error, details_summary }
-  | "model_change"             // payload: { provider, model, previous?: {provider, model} }
-  | "thinking"                 // payload: { text }  — extracted from assistant message thinking blocks
-  | "error"                    // payload: { message, where }
-  | "custom"                   // payload: { customType, data }   — pass-through for extensions
-  ;
+  | "session_start" // payload: { reason, version, parentSession? }
+  | "session_shutdown" // payload: { reason }
+  | "agent_start" // payload: { prompt, images_count }
+  | "agent_end" // payload: { message_count }
+  | "turn_start" // payload: { turnIndex }
+  | "turn_end" // payload: { turnIndex, usage?, cost? }
+  | "user_message" // payload: { content, images_count }
+  | "assistant_message" // payload: { text, thinking, tool_calls, usage, cost, stopReason }
+  | "tool_call" // payload: { tool_name, tool_call_id, args }
+  | "tool_result" // payload: { tool_name, tool_call_id, content_text, is_error, details_summary }
+  | "model_change" // payload: { provider, model, previous?: {provider, model} }
+  | "thinking" // payload: { text }  — extracted from assistant message thinking blocks
+  | "error" // payload: { message, where }
+  | "custom"; // payload: { customType, data }   — pass-through for extensions
 ```
 
 Numbers (`usage`, `cost`) are flattened where possible to keep the UI dumb.
@@ -105,15 +104,15 @@ Numbers (`usage`, `cost`) are flattened where possible to keep the UI dumb.
 All endpoints require `Authorization: Bearer <OBS_AUTH_TOKEN>` (server-side env).
 For v1, the server may also accept `?token=` for the SSE endpoint (browsers can't set Authorization on EventSource).
 
-| Method | Path                                                            | Purpose |
-|--------|-----------------------------------------------------------------|---------|
-| GET    | `/health`                                                        | `{ ok: true, version, uptime_s, events_total, sessions_total }` |
-| POST   | `/events`                                                        | Body: `ObsEvent` or `ObsEvent[]`. Returns `{ ingested: N }`.    |
-| GET    | `/sessions?pool=&tag=&since=&limit=`                             | Recent sessions w/ counts, latest ts, cwd, model.               |
-| GET    | `/sessions/:session_id/events?limit=&before_seq=&type=`          | Paginated event replay.                                          |
-| GET    | `/events/stream?pool=&tag=&session_id=&token=`                   | SSE stream of new events (filtered).                             |
-| GET    | `/`                                                              | Static `index.html` (UI).                                        |
-| GET    | `/app.js`, `/style.css`, etc.                                    | Static assets from `public/`.                                    |
+| Method | Path                                                    | Purpose                                                         |
+| ------ | ------------------------------------------------------- | --------------------------------------------------------------- |
+| GET    | `/health`                                               | `{ ok: true, version, uptime_s, events_total, sessions_total }` |
+| POST   | `/events`                                               | Body: `ObsEvent` or `ObsEvent[]`. Returns `{ ingested: N }`.    |
+| GET    | `/sessions?pool=&tag=&since=&limit=`                    | Recent sessions w/ counts, latest ts, cwd, model.               |
+| GET    | `/sessions/:session_id/events?limit=&before_seq=&type=` | Paginated event replay.                                         |
+| GET    | `/events/stream?pool=&tag=&session_id=&token=`          | SSE stream of new events (filtered).                            |
+| GET    | `/`                                                     | Static `index.html` (UI).                                       |
+| GET    | `/app.js`, `/style.css`, etc.                           | Static assets from `public/`.                                   |
 
 ### Auth
 
@@ -124,14 +123,14 @@ For v1, the server may also accept `?token=` for the SSE endpoint (browsers can'
 
 The extension registers these pi flags via `pi.registerFlag`:
 
-| Flag                 | Type   | Default                            | Notes |
-|----------------------|--------|------------------------------------|-------|
-| `--obs-server-url`   | string | env `OBS_SERVER_URL` or `http://127.0.0.1:43190` | |
-| `--obs-token`        | string | env `OBS_AUTH_TOKEN`               | Never logged. |
-| `--o-pool`           | string | env `OBS_POOL` or `"default"`      | Logical bucket. |
-| `--o-tag`            | string | (none)                             | Repeatable. Comma-split also accepted. |
-| `--o-name`           | string | (none)                             | Optional friendly agent name. |
-| `--obs-disable`      | bool   | false                              | Hard kill switch; do not register listeners. |
+| Flag               | Type   | Default                                          | Notes                                        |
+| ------------------ | ------ | ------------------------------------------------ | -------------------------------------------- |
+| `--obs-server-url` | string | env `OBS_SERVER_URL` or `http://127.0.0.1:43190` |                                              |
+| `--obs-token`      | string | env `OBS_AUTH_TOKEN`                             | Never logged.                                |
+| `--o-pool`         | string | env `OBS_POOL` or `"default"`                    | Logical bucket.                              |
+| `--o-tag`          | string | (none)                                           | Repeatable. Comma-split also accepted.       |
+| `--o-name`         | string | (none)                                           | Optional friendly agent name.                |
+| `--obs-disable`    | bool   | false                                            | Hard kill switch; do not register listeners. |
 
 The extension auto-loads `.env` from `cwd` (and `.env.local`) on `session_start` so the user can drop creds next to their project.
 
@@ -193,6 +192,7 @@ Single-page HTML at `GET /`. Vanilla JS, no build step. Layout:
 ```
 
 Behaviour:
+
 - Left rail: live list of sessions (latest first), with pool/tag filters.
 - Right pane: timeline of selected session. Each event is a collapsed card; click to expand. Tool calls show args, tool results show output (trimmed), assistant_message shows text + cost + tokens.
 - Top right: `● live` indicator (green when SSE connected, red when not).

@@ -38,15 +38,22 @@ const ArtifactKind = Type.Union([
 ]);
 
 function cleanRef(ref: string): string {
-  return String(ref || "artifact")
-    .replace(/^@+/, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64) || "artifact";
+  return (
+    String(ref || "artifact")
+      .replace(/^@+/, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "artifact"
+  );
 }
 
-function runCommand(command: string, args: string[], timeoutMs: number, signal?: AbortSignal): Promise<{ ok: boolean; text: string; code: number | null }> {
+function runCommand(
+  command: string,
+  args: string[],
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; text: string; code: number | null }> {
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
@@ -55,8 +62,12 @@ function runCommand(command: string, args: string[], timeoutMs: number, signal?:
     const onAbort = () => child.kill("SIGTERM");
     signal?.addEventListener("abort", onAbort, { once: true });
 
-    child.stdout.on("data", (d) => { stdout += d.toString(); });
-    child.stderr.on("data", (d) => { stderr += d.toString(); });
+    child.stdout.on("data", (d) => {
+      stdout += d.toString();
+    });
+    child.stderr.on("data", (d) => {
+      stderr += d.toString();
+    });
     child.on("error", (err) => {
       clearTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
@@ -83,7 +94,12 @@ function decodeHtml(input: string): string {
 }
 
 function stripHtml(input: string): string {
-  return decodeHtml(input.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  return decodeHtml(
+    input
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
 }
 
 function normalizeDuckUrl(raw: string): string {
@@ -98,7 +114,17 @@ function normalizeDuckUrl(raw: string): string {
   }
 }
 
-async function genericWebSearch(query: string, limit: number, timeoutMs: number, signal?: AbortSignal): Promise<{ ok: boolean; text: string; source: string; results: Array<{ title: string; url: string; snippet: string }> }> {
+async function genericWebSearch(
+  query: string,
+  limit: number,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<{
+  ok: boolean;
+  text: string;
+  source: string;
+  results: Array<{ title: string; url: string; snippet: string }>;
+}> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const onAbort = () => controller.abort();
@@ -110,13 +136,14 @@ async function genericWebSearch(query: string, limit: number, timeoutMs: number,
       signal: controller.signal,
       headers: {
         "user-agent": "Mozilla/5.0 (compatible; pi-steelman-agent/1.0; +https://localhost)",
-        "accept": "text/html,application/xhtml+xml",
+        accept: "text/html,application/xhtml+xml",
       },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
     const results: Array<{ title: string; url: string; snippet: string }> = [];
-    const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:<a[^>]+class="result__snippet"[^>]*>|<div[^>]+class="result__snippet"[^>]*>)([\s\S]*?)(?:<\/a>|<\/div>)/gi;
+    const re =
+      /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:<a[^>]+class="result__snippet"[^>]*>|<div[^>]+class="result__snippet"[^>]*>)([\s\S]*?)(?:<\/a>|<\/div>)/gi;
     let match: RegExpExecArray | null;
     while ((match = re.exec(html)) && results.length < limit) {
       results.push({
@@ -134,16 +161,29 @@ async function genericWebSearch(query: string, limit: number, timeoutMs: number,
       }
     }
 
-    if (!results.length) return { ok: false, text: "Generic web search returned no parseable results.", source: "duckduckgo-html", results: [] };
+    if (!results.length)
+      return {
+        ok: false,
+        text: "Generic web search returned no parseable results.",
+        source: "duckduckgo-html",
+        results: [],
+      };
 
     const text = [
       `Generic web search results for: ${query}`,
       "",
-      ...results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}${r.snippet ? `\n   ${r.snippet}` : ""}`),
+      ...results.map(
+        (r, i) => `${i + 1}. ${r.title}\n   ${r.url}${r.snippet ? `\n   ${r.snippet}` : ""}`,
+      ),
     ].join("\n");
     return { ok: true, text, source: "duckduckgo-html", results };
   } catch (err: any) {
-    return { ok: false, text: `Generic web search failed: ${err?.message || String(err)}`, source: "duckduckgo-html", results: [] };
+    return {
+      ok: false,
+      text: `Generic web search failed: ${err?.message || String(err)}`,
+      source: "duckduckgo-html",
+      results: [],
+    };
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
@@ -197,7 +237,10 @@ async function postReferences(runId: string, references: ResearchRef[]) {
   try {
     await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ references }),
       signal: controller.signal,
     });
@@ -212,10 +255,18 @@ function dedupeRefs(refs: ResearchRef[]): ResearchRef[] {
   const seen = new Set<string>();
   const out: ResearchRef[] = [];
   for (const r of refs) {
-    const url = String(r.url || "").trim().replace(/[)\].,'"]+$/, "");
+    const url = String(r.url || "")
+      .trim()
+      .replace(/[)\].,'"]+$/, "");
     if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
     seen.add(url);
-    out.push({ url, title: String(r.title || url).replace(/\s+/g, " ").trim().slice(0, 180) });
+    out.push({
+      url,
+      title: String(r.title || url)
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 180),
+    });
     if (out.length >= 12) break;
   }
   return out;
@@ -237,9 +288,13 @@ function refsFromFirecrawlJson(jsonText: string): ResearchRef[] {
     const out: ResearchRef[] = [];
     const visit = (node: any) => {
       if (!node || typeof node !== "object") return;
-      if (Array.isArray(node)) { for (const n of node) visit(n); return; }
+      if (Array.isArray(node)) {
+        for (const n of node) visit(n);
+        return;
+      }
       const url = node.url || node.link || node.sourceURL || node.source_url;
-      if (typeof url === "string") out.push({ url, title: String(node.title || node.name || node.description || url) });
+      if (typeof url === "string")
+        out.push({ url, title: String(node.title || node.name || node.description || url) });
       for (const k of Object.keys(node)) visit(node[k]);
     };
     visit(data);
@@ -258,14 +313,18 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "steelman_research",
     label: "Research",
-    description: "Research an investment thesis, ticker, market, or source. Tries Firecrawl CLI first, then falls back to generic web search.",
-    promptSnippet: "Research recent investment facts with Firecrawl first and generic web search fallback",
+    description:
+      "Research an investment thesis, ticker, market, or source. Tries Firecrawl CLI first, then falls back to generic web search.",
+    promptSnippet:
+      "Research recent investment facts with Firecrawl first and generic web search fallback",
     promptGuidelines: [
       "Use steelman_research to gather recent facts, market context, company risks, or source material before making evidence-heavy claims.",
     ],
     parameters: Type.Object({
       query: Type.String({ description: "Search query or URL to research" }),
-      limit: Type.Optional(Type.Number({ description: "Approximate number of search results to request", default: 5 })),
+      limit: Type.Optional(
+        Type.Number({ description: "Approximate number of search results to request", default: 5 }),
+      ),
     }),
     async execute(_toolCallId, params, signal, onUpdate) {
       const query = String(params.query || "").trim();
@@ -302,13 +361,25 @@ export default function (pi: ExtensionAPI) {
           await postReferences(runId, refs);
           return {
             content: [{ type: "text", text: result.text.slice(0, 20_000) }],
-            details: { source: "firecrawl", command: [cmd, ...args], references: refs.length, truncated: result.text.length > 20_000 },
+            details: {
+              source: "firecrawl",
+              command: [cmd, ...args],
+              references: refs.length,
+              truncated: result.text.length > 20_000,
+            },
           };
         }
         if (result.text) firecrawlErrors.push(result.text.slice(0, 500));
       }
 
-      onUpdate?.({ content: [{ type: "text", text: `Firecrawl unavailable or empty; falling back to generic web search: ${query}` }] });
+      onUpdate?.({
+        content: [
+          {
+            type: "text",
+            text: `Firecrawl unavailable or empty; falling back to generic web search: ${query}`,
+          },
+        ],
+      });
       const generic = await genericWebSearch(query, limit, Math.min(timeoutMs, 12_000), signal);
       if (generic.ok) {
         const refs = dedupeRefs([
@@ -332,7 +403,12 @@ export default function (pi: ExtensionAPI) {
       const fallback = `Firecrawl and generic web search were unavailable for: ${query}\n\nFirecrawl errors: ${firecrawlErrors.join(" | ") || "none"}\nGeneric fallback: ${generic.text}\n\nProceed using clearly-labeled general knowledge and explicitly state where fresh research would be needed.`;
       return {
         content: [{ type: "text", text: fallback }],
-        details: { source: "fallback", query, firecrawl_errors: firecrawlErrors.slice(0, 2), generic_error: generic.text },
+        details: {
+          source: "fallback",
+          query,
+          firecrawl_errors: firecrawlErrors.slice(0, 2),
+          generic_error: generic.text,
+        },
       };
     },
   });
@@ -340,7 +416,8 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "steelman_emit_artifact",
     label: "Emit UI Artifact",
-    description: "Render a structured UI artifact in the product's left panel and return a clickable @reference for chat.",
+    description:
+      "Render a structured UI artifact in the product's left panel and return a clickable @reference for chat.",
     promptSnippet: "Create UI artifacts: text, table, bar-chart, pie-chart, or html",
     promptGuidelines: [
       "Use steelman_emit_artifact whenever data, comparisons, risk weights, scenarios, or source summaries would be clearer as UI in the left pane.",
@@ -351,14 +428,26 @@ export default function (pi: ExtensionAPI) {
       kind: ArtifactKind,
       title: Type.String(),
       summary: Type.Optional(Type.String()),
-      data: Type.Optional(Type.Any({ description: "Structured data. Tables: {columns, rows} or array of objects. Charts: {labels, values} or [{label,value}]." })),
+      data: Type.Optional(
+        Type.Any({
+          description:
+            "Structured data. Tables: {columns, rows} or array of objects. Charts: {labels, values} or [{label,value}].",
+        }),
+      ),
       markdown: Type.Optional(Type.String()),
-      html: Type.Optional(Type.String({ description: "Only for kind=html. Rendered in a sandboxed iframe." })),
+      html: Type.Optional(
+        Type.String({ description: "Only for kind=html. Rendered in a sandboxed iframe." }),
+      ),
     }),
     async execute(_toolCallId, params) {
       const runId = process.env.STEELMAN_RUN_ID;
       if (!runId) {
-        return { content: [{ type: "text", text: "STEELMAN_RUN_ID is not configured; artifact was not emitted." }], isError: true };
+        return {
+          content: [
+            { type: "text", text: "STEELMAN_RUN_ID is not configured; artifact was not emitted." },
+          ],
+          isError: true,
+        };
       }
       const ref = cleanRef(params.ref);
       const artifact = {
