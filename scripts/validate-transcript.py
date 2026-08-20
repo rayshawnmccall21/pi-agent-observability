@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Deterministic STY-190 browser validation against an isolated Bun server."""
 
+from __future__ import annotations
+
 import json
 import os
 import signal
