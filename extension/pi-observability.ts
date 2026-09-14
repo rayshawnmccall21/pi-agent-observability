@@ -251,6 +251,7 @@ class EventQueue {
   private maxQueueSize = 10000;
   private flushTimer: NodeJS.Timeout | null = null;
   private backoffMs = 250;
+  private sinkDisabled = false;
   private maxBackoffMs = 5000;
   private isFlushing = false;
   private consecutiveFailures = 0;
@@ -313,7 +314,7 @@ class EventQueue {
   }
 
   public async flush() {
-    if (this.isFlushing || this.queue.length === 0) return;
+    if (this.isFlushing || this.queue.length === 0 || this.sinkDisabled) return;
     this.isFlushing = true;
 
     const batch = this.queue.slice(0, 50);
@@ -345,9 +346,22 @@ class EventQueue {
       this.consecutiveFailures++;
       this.onPostFailed(err);
       this.backoffMs = Math.min(this.backoffMs * 2, this.maxBackoffMs);
+      // Circuit breaker: after repeated consecutive failures (dead/unreachable
+      // server), disable the sink entirely instead of POST-failing forever.
+      // Keeps a bounded log line and preserves local operation.
+      if (this.consecutiveFailures >= 5 && !this.sinkDisabled) {
+        this.sinkDisabled = true;
+        this.queue.length = 0;
+        try {
+          this.pi.ui?.notify?.(
+            `📡 pi-observability: sink disabled after ${this.consecutiveFailures} consecutive failures (server unreachable). Events no longer POSTed.`,
+            "warning",
+          );
+        } catch { /* hasUI may be false */ }
+      }
     } finally {
       this.isFlushing = false;
-      if (this.queue.length > 0) {
+      if (!this.sinkDisabled && this.queue.length > 0) {
         this.scheduleFlush();
       }
     }
