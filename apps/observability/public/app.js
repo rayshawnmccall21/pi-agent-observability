@@ -223,6 +223,204 @@
     "error",
   ];
 
+  function renderSummaryContent(container, evt) {
+    const p = evt.payload ?? {};
+    switch (evt.type) {
+      case "session_start": {
+        const span = document.createElement("span");
+        span.className = "dim";
+        span.textContent = `start · ${p.reason ?? "?"}`;
+        container.appendChild(span);
+        break;
+      }
+      case "session_shutdown": {
+        const span = document.createElement("span");
+        span.className = "dim";
+        span.textContent = `shutdown · ${p.reason ?? "?"}`;
+        container.appendChild(span);
+        break;
+      }
+      case "agent_start": {
+        const opts = p.system_prompt_options ?? {};
+        const parts = [`▶ ${p.prompt ?? ""}`];
+        const tools = opts.selected_tools?.length ?? 0;
+        const skills = opts.skills?.length ?? 0;
+        const files = opts.context_files?.length ?? 0;
+        if (tools) parts.push(`${tools} tools`);
+        if (skills) parts.push(`${skills} skills`);
+        if (files) parts.push(`${files} ctx-files`);
+        if (p.system_prompt_bytes) parts.push(`sys ${fmtBytes(p.system_prompt_bytes)}`);
+        container.textContent = parts.join(" · ");
+        break;
+      }
+      case "agent_end": {
+        const span = document.createElement("span");
+        span.className = "dim";
+        span.textContent = `■ ${p.message_count ?? "?"} messages`;
+        container.appendChild(span);
+        break;
+      }
+      case "turn_start": {
+        const span = document.createElement("span");
+        span.className = "dim";
+        span.textContent = `turn #${p.turn_index ?? "?"}`;
+        container.appendChild(span);
+        break;
+      }
+      case "turn_end": {
+        const span = document.createElement("span");
+        span.className = "dim";
+        span.textContent = `turn #${p.turn_index ?? "?"}${p.usage ? " · " + p.usage.total_tokens + "tk" : ""}`;
+        container.appendChild(span);
+        break;
+      }
+      case "user_message": {
+        const userText = document.createElement("div");
+        userText.className = "user-text";
+        const label = document.createElement("span");
+        label.className = "user-label";
+        label.textContent = "you:";
+        userText.append(label, " ", p.text ?? "");
+        container.appendChild(userText);
+        break;
+      }
+      case "assistant_message": {
+        const meta = document.createElement("span");
+        meta.className = "msg-meta";
+        meta.textContent = `ai: · ${p.usage?.total_tokens ?? 0}tk · $${(p.usage?.cost_total ?? 0).toFixed(4)}${p.latency_ms ? " · " + p.latency_ms + "ms" : ""}`;
+        container.appendChild(meta);
+        if (p.text) {
+          const textDiv = document.createElement("div");
+          textDiv.className = "assistant-text";
+          textDiv.textContent = p.text;
+          container.appendChild(textDiv);
+        }
+        break;
+      }
+      case "thinking": {
+        const thinkDiv = document.createElement("div");
+        thinkDiv.className = "thinking-text";
+        thinkDiv.textContent = `〽 ${p.text ?? ""}`;
+        container.appendChild(thinkDiv);
+        break;
+      }
+      case "tool_call": {
+        const block = document.createElement("div");
+        block.className = "cmd-block";
+        const name = p.tool_name ?? "";
+        if (name === "bash" && p.args?.command) {
+          const label = document.createElement("span");
+          label.className = "cmd-label";
+          label.textContent = "command:";
+          const badge = document.createElement("div");
+          badge.className = "cmd-badge";
+          badge.textContent = `$ ${p.args.command}`;
+          block.append(label, badge);
+        } else if (name === "read" && p.args?.path) {
+          const label = document.createElement("span");
+          label.className = "cmd-label";
+          label.textContent = "read file:";
+          const badge = document.createElement("span");
+          badge.className = "file-badge";
+          badge.textContent = `📄 ${p.args.path}`;
+          block.append(label, badge);
+          if (p.args.offset || p.args.limit) {
+            const dim = document.createElement("span");
+            dim.className = "arg-dim";
+            dim.textContent = ` (offset: ${p.args.offset ?? 1}, limit: ${p.args.limit ?? "all"})`;
+            block.append(dim);
+          }
+        } else if ((name === "write" || name === "edit") && (p.args?.path || p.args?.file)) {
+          const label = document.createElement("span");
+          label.className = "cmd-label";
+          label.textContent = `${name}:`;
+          const badge = document.createElement("span");
+          badge.className = "file-badge";
+          badge.textContent = `📝 ${p.args.path || p.args.file}`;
+          block.append(label, badge);
+        } else {
+          const label = document.createElement("span");
+          label.className = "cmd-label";
+          label.textContent = `${name}:`;
+          const badge = document.createElement("div");
+          badge.className = "cmd-badge";
+          badge.textContent = JSON.stringify(p.args ?? {});
+          block.append(label, badge);
+        }
+        container.appendChild(block);
+        break;
+      }
+      case "tool_result": {
+        const isErr = !!p.is_error;
+        const block = document.createElement("div");
+        block.className = "cmd-block";
+        const icon = document.createElement("span");
+        icon.className = `status-icon ${isErr ? "status-err" : "status-ok"}`;
+        icon.textContent = isErr ? "✗" : "✓";
+        const label = document.createElement("span");
+        label.className = "result-label";
+        label.textContent = ` ${p.tool_name ?? "tool"} output:`;
+        block.append(icon, label);
+        const outputText = p.content_text || (p.details ? JSON.stringify(p.details, null, 2) : "");
+        if (outputText) {
+          const preview = document.createElement("div");
+          preview.className = "output-preview";
+          preview.textContent = outputText;
+          block.appendChild(preview);
+        }
+        container.appendChild(block);
+        break;
+      }
+      case "model_change": {
+        container.textContent = `model: ${p.previous_model ?? "?"} → ${p.provider ?? ""}/${p.model ?? ""}`;
+        break;
+      }
+      case "compaction": {
+        container.textContent = `📦 compact · ${p.tokens_before ?? "?"} tk → "${p.summary_preview ?? ""}"`;
+        break;
+      }
+      case "branch_nav": {
+        container.textContent = `🌿 branch · ${shortId(p.from_id)} → ${shortId(p.to_id)}`;
+        break;
+      }
+      case "error": {
+        const errSpan = document.createElement("span");
+        errSpan.className = "status-err";
+        errSpan.textContent = `! ${p.message ?? ""}`;
+        container.appendChild(errSpan);
+        break;
+      }
+      case "custom": {
+        if (p.custom_type === "bmad_query_experts.child") {
+          const activity = p.data ?? {};
+          const isFailed = activity.phase === "failed";
+          const isDone = activity.phase === "completed";
+          const icon = document.createElement("span");
+          icon.className = `status-icon ${isFailed ? "status-err" : isDone ? "status-ok" : ""}`;
+          icon.textContent = isDone
+            ? "✓"
+            : isFailed
+              ? "✗"
+              : activity.phase === "cancelled"
+                ? "■"
+                : "◉";
+          const position = `${Number(activity.index ?? 0) + 1}/${activity.total ?? "?"}`;
+          const elapsed = activity.elapsedMs ? ` · ${activity.elapsedMs}ms` : "";
+          container.append(
+            icon,
+            ` BMAD expert ${position} · ${activity.expert ?? "?"} · ${activity.phase ?? "?"}${elapsed}`,
+          );
+        } else {
+          container.textContent = p.custom_type ?? "custom";
+        }
+        break;
+      }
+      default:
+        container.textContent = "";
+        break;
+    }
+  }
+
   function summaryFor(evt) {
     const p = evt.payload ?? {};
     switch (evt.type) {
@@ -232,7 +430,7 @@
         return `shutdown · ${p.reason ?? "?"}`;
       case "agent_start": {
         const opts = p.system_prompt_options ?? {};
-        const parts = [`▶ ${trunc(p.prompt, 80)}`];
+        const parts = [`▶ ${p.prompt ?? ""}`];
         const tools = opts.selected_tools?.length ?? 0;
         const skills = opts.skills?.length ?? 0;
         const files = opts.context_files?.length ?? 0;
@@ -249,25 +447,45 @@
       case "turn_end":
         return `turn #${p.turn_index ?? "?"}${p.usage ? " · " + p.usage.total_tokens + "tk" : ""}`;
       case "user_message":
-        return `you: ${trunc(p.text, 100)}`;
+        return `you: ${p.text ?? ""}`;
       case "assistant_message":
-        return `ai: ${trunc(p.text, 100)} · ${p.usage?.total_tokens ?? 0}tk · $${(p.usage?.cost_total ?? 0).toFixed(4)}${p.latency_ms ? " · " + p.latency_ms + "ms" : ""}`;
+        return `ai: ${p.text ?? ""} · ${p.usage?.total_tokens ?? 0}tk · $${(p.usage?.cost_total ?? 0).toFixed(4)}${p.latency_ms ? " · " + p.latency_ms + "ms" : ""}`;
       case "thinking":
-        return `〽 ${trunc(p.text, 100)}`;
-      case "tool_call":
-        return `→ ${p.tool_name}(${trunc(JSON.stringify(p.args ?? {}), 60)})`;
-      case "tool_result":
-        return `← ${p.tool_name} · ${p.is_error ? "✗" : "✓"} · ${trunc(p.content_text, 80)}`;
+        return `〽 ${p.text ?? ""}`;
+      case "tool_call": {
+        if (p.tool_name === "bash" && p.args?.command) return `→ bash: $ ${p.args.command}`;
+        if (p.tool_name === "read" && p.args?.path) return `→ read: ${p.args.path}`;
+        return `→ ${p.tool_name}(${JSON.stringify(p.args ?? {})})`;
+      }
+      case "tool_result": {
+        const outputText = p.content_text || (p.details ? JSON.stringify(p.details) : "");
+        return `← ${p.tool_name} · ${p.is_error ? "✗" : "✓"} · ${outputText}`;
+      }
       case "model_change":
         return `model: ${p.previous_model ?? "?"} → ${p.provider}/${p.model}`;
       case "compaction":
-        return `📦 compact · ${p.tokens_before ?? "?"} tk → "${trunc(p.summary_preview, 60)}"`;
+        return `📦 compact · ${p.tokens_before ?? "?"} tk → "${p.summary_preview ?? ""}"`;
       case "branch_nav":
         return `🌿 branch · ${shortId(p.from_id)} → ${shortId(p.to_id)}`;
       case "error":
-        return `! ${trunc(p.message, 100)}`;
-      case "custom":
+        return `! ${p.message ?? ""}`;
+      case "custom": {
+        if (p.custom_type === "bmad_query_experts.child") {
+          const activity = p.data ?? {};
+          const icon =
+            activity.phase === "completed"
+              ? "✓"
+              : activity.phase === "failed"
+                ? "✗"
+                : activity.phase === "cancelled"
+                  ? "■"
+                  : "◉";
+          const position = `${Number(activity.index ?? 0) + 1}/${activity.total ?? "?"}`;
+          const elapsed = activity.elapsedMs ? ` · ${activity.elapsedMs}ms` : "";
+          return `${icon} BMAD expert ${position} · ${activity.expert ?? "?"} · ${activity.phase ?? "?"}${elapsed}`;
+        }
         return `${p.custom_type ?? "custom"}`;
+      }
       default:
         return "";
     }
@@ -1382,7 +1600,7 @@
     const summary = document.createElement("span");
     summary.className = "evt-summary";
     applySummaryClasses(summary, evt);
-    summary.textContent = summaryFor(evt);
+    renderSummaryContent(summary, evt);
     row.append(timestamp, type, summary);
 
     if (isLive && typeof window.__pulseColorFor === "function") {
@@ -1915,6 +2133,7 @@
   Object.assign(window.OBS, {
     getState: () => STATE,
     summaryFor,
+    renderSummaryContent,
     summaryClass,
     eventTypeClass,
     applySummaryClasses,

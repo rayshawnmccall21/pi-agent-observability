@@ -28,9 +28,7 @@ import {
   type ContextFileDigest,
   type SkillDigest,
 } from "../shared/types.ts";
-
-// ━━ Module-scope state ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-let seqCounter = 0;
+import { nextObservabilitySequence, subscribeBmadExpertActivity } from "./bmad-expert-capture.ts";
 
 // ━━ Helper functions ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -231,7 +229,7 @@ function createEventEnvelope<T>(
     model?: string;
   },
 ): ObsEventEnvelope<T> {
-  const seq = seqCounter++;
+  const seq = nextObservabilitySequence(sessionInfo.sessionId);
   return {
     event_id: crypto.randomUUID(),
     ts: new Date().toISOString(),
@@ -442,6 +440,7 @@ export default function (pi: ExtensionAPI) {
   // turnIndex → ts of first text/thinking delta (per-turn TTFT marker).
   // Cleared alongside turnStartTimes at message_end.
   const firstTokenTimes = new Map<number, number>();
+  let removeBmadExpertActivity: (() => void) | undefined;
 
   function logObs(message: string, extra?: any) {
     try {
@@ -483,9 +482,10 @@ export default function (pi: ExtensionAPI) {
         .filter(Boolean);
     }
 
-    // 3. Reset seq counter + boot-snapshot gate
-    seqCounter = 0;
+    // 3. Reset the per-session boot-snapshot gate. Sequence ownership is
+    // process-global and keyed by session id so /reload cannot reuse seq values.
     bootSnapshotEmitted = false;
+    const sessionId = ctx.sessionManager.getSessionId();
 
     // 4. Initialize Queue Manager
     queue = new EventQueue(
@@ -495,7 +495,7 @@ export default function (pi: ExtensionAPI) {
       (err) => {
         logObs("post_failed", { error: err?.message || String(err) });
       },
-      () => seqCounter++,
+      () => nextObservabilitySequence(sessionId),
     );
 
     if (!token) {
@@ -532,7 +532,7 @@ export default function (pi: ExtensionAPI) {
 
     // 5. Initialize session info
     sessionInfo = {
-      sessionId: ctx.sessionManager.getSessionId(),
+      sessionId,
       sessionFile: ctx.sessionManager.getSessionFile(),
       cwd: ctx.cwd,
       agentName: name,
@@ -541,6 +541,11 @@ export default function (pi: ExtensionAPI) {
       provider: ctx.model?.provider,
       model: ctx.model?.id,
     };
+    removeBmadExpertActivity?.();
+    removeBmadExpertActivity = subscribeBmadExpertActivity(pi.events, (payload) => {
+      if (!queue || !sessionInfo) return;
+      queue.push(createEventEnvelope("custom", payload, sessionInfo));
+    });
 
     // 6. Log boot
     logObs("obs boot", { serverUrl, pool, tags, agentName: name });
@@ -835,6 +840,8 @@ export default function (pi: ExtensionAPI) {
 
   // ━━ session_shutdown ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   pi.on("session_shutdown", async (event, _ctx) => {
+    removeBmadExpertActivity?.();
+    removeBmadExpertActivity = undefined;
     if (!queue || !sessionInfo) return;
 
     const shutdownPayload: SessionShutdownPayload = {

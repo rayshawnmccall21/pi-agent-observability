@@ -7,6 +7,7 @@
   const O = window.OBS;
   const {
     summaryFor,
+    renderSummaryContent,
     eventTypeClass,
     applySummaryClasses,
     renderDetailHTML,
@@ -358,7 +359,11 @@
     const summary = document.createElement("span");
     summary.className = "lane-evt-summary";
     applySummaryClasses(summary, evt);
-    summary.textContent = summaryFor(evt);
+    if (typeof renderSummaryContent === "function") {
+      renderSummaryContent(summary, evt);
+    } else {
+      summary.textContent = summaryFor(evt);
+    }
     row.append(timestamp, type, summary);
 
     if (isLive) {
