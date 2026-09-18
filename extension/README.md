@@ -66,3 +66,4 @@ The extension maps agent events directly into the canonical `ObsEvent` envelopes
 - **`model_change`**: Captured on manual switches or model cycling.
 - **`compaction`**: Emitted when session history is compacted (manual or auto).
 - **`branch_nav`**: Emitted on session-tree branch navigation (with optional summary preview).
+- **`custom` / `bmad_query_experts.child`**: Validated child start/completion/failure/cancellation from the optional `pi-bmad-orchestrator:expert-activity:v1` shared-bus protocol. Payloads contain only bounded identities, positions, phases, timing, sequence, and output-size metadata; questions, answers, prompts, paths, process data, argv, and environment values are rejected.
